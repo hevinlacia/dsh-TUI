@@ -1,0 +1,240 @@
+/**
+ * Session controller: the single wiring hub between the runtime client, the
+ * store, the session registry, and command execution. UI components only
+ * read the store and call these methods.
+ * @module dsh-tui/controller
+ */
+
+import type { CliOptions } from './config.js'
+import { COMMANDS, lookupCommand, parseInput } from './commands.js'
+import { reduce, initialState, type TuiState } from './events/reducer.js'
+import { tuiEventsFromNotification, type TuiEvent } from './events/types.js'
+import type { HarnessClient } from './harness/client.js'
+import { SessionRegistry } from './sessions.js'
+import { Store } from './state/store.js'
+
+/** Callbacks the TUI supplies to the controller for UI-only concerns. */
+export interface ControllerHooks {
+  /** Open a modal (sessions browser / model switch). */
+  openModal?: (modal: 'sessions' | 'model') => void
+  /** Called when the user quits. */
+  onExit?: () => void
+}
+
+/**
+ * Owns one active session id and connects the runtime notification stream to
+ * the store. Created once per process; {@link start} boots the runtime.
+ */
+export class SessionController {
+  private sessionId = `session-${randomPart()}`
+  private readonly registry: SessionRegistry
+  private readonly store: Store<TuiState>
+
+  constructor(
+    readonly client: HarnessClient,
+    readonly options: CliOptions & { registryPath: string },
+    private readonly hooks: ControllerHooks = {},
+  ) {
+    this.registry = new SessionRegistry(options.registryPath)
+    this.registry.load()
+    this.store = new Store(initialState(this.sessionId))
+  }
+
+  /** The store UI components read. */
+  getState(): Store<TuiState> {
+    return this.store
+  }
+
+  /** Current active session id. */
+  currentSessionId(): string {
+    return this.sessionId
+  }
+
+  /** Named sessions for the browser. */
+  sessions(): ReturnType<SessionRegistry['list']> {
+    return this.registry.list()
+  }
+
+  /** Spawn the runtime, handshake, and start feeding notifications. */
+  async start(): Promise<void> {
+    this.client.onNotification(notification => {
+      for (const event of tuiEventsFromNotification(notification)) {
+        this.apply(event)
+      }
+    })
+    this.store.setState(state => ({ ...state, connection: 'connecting' }))
+    try {
+      this.client.start()
+      const result = await this.client.initialize({
+        cwd: this.options.cwd,
+        provider: this.options.provider,
+        model: this.options.model,
+      })
+      void result
+      this.apply({ type: 'connected' })
+      this.apply({ type: 'context', provider: this.options.provider, model: this.options.model })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.apply({ type: 'disconnected', reason: message })
+      throw error
+    }
+  }
+
+  /** Submit a plain user prompt on the active session. */
+  async submitPrompt(text: string): Promise<void> {
+    const prompt = text.trim()
+    if (prompt === '') return
+    // No local echo: the runtime's `user/message` session event is the single
+    // source for the chat surface (see docs/protocol.md).
+    this.touchSession(() => ({})) // bump updatedAt only
+    try {
+      await this.client.sessionPrompt(this.sessionId, prompt)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.apply({ type: 'error', message })
+    }
+  }
+
+  /** Handle one input line: slash command or prompt. */
+  async submit(input: string): Promise<boolean> {
+    const parsed = parseInput(input)
+    if (parsed.kind === 'prompt') {
+      await this.submitPrompt(parsed.text)
+      return true
+    }
+    await this.runCommand(parsed.name, parsed.args)
+    return true
+  }
+
+  /** Start a fresh session; keeps the runtime. */
+  newSession(): void {
+    this.sessionId = `session-${randomPart()}`
+    const fresh = initialState(this.sessionId)
+    fresh.connection = this.store.getState().connection
+    fresh.provider = this.store.getState().provider
+    fresh.model = this.store.getState().model
+    this.store.setState(() => fresh)
+    this.apply({ type: 'notice', message: `new session ${shortId(this.sessionId)}` })
+  }
+
+  /** Switch the active session id (for `/resume`); view resets to the fresh id. */
+  resumeSession(id: string): void {
+    this.sessionId = id
+    const fresh = initialState(id)
+    fresh.connection = this.store.getState().connection
+    fresh.provider = this.store.getState().provider
+    fresh.model = this.store.getState().model
+    const meta = this.registry.list().find(entry => entry.id === id)
+    fresh.title = meta?.title ?? ''
+    this.store.setState(() => fresh)
+    this.apply({ type: 'notice', message: `resumed ${shortId(id)} — previous messages stay in the runtime log` })
+  }
+
+  /** Switch the model for subsequently created sessions. */
+  async switchModel(model: string): Promise<void> {
+    if (model === this.store.getState().model) {
+      this.apply({ type: 'notice', message: `already on ${model}` })
+      return
+    }
+    try {
+      await this.client.switchModel(model, this.options.provider, this.options.cwd)
+      this.apply({ type: 'context', provider: this.options.provider, model })
+      this.apply({ type: 'notice', message: `model → ${model} (applies to new sessions; /new to start one)` })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.apply({ type: 'error', message })
+    }
+  }
+
+  /** Clear the rendered chat view. */
+  clear(): void {
+    this.store.setState(state => ({ ...state, items: [] }))
+  }
+
+  /** Apply one TuiEvent through the reducer and sync registry metadata. */
+  private apply(event: TuiEvent): void {
+    this.store.setState(state => reduce(state, event))
+    if (event.type === 'user-message') {
+      this.touchSession(meta => ({ messageCount: meta.messageCount + 1 }))
+    }
+    if (event.type === 'title' && event.title !== '') {
+      this.touchSession(() => ({ title: event.title }))
+    }
+  }
+
+  private touchSession(patch: (meta: { title: string; messageCount: number }) => { title?: string; messageCount?: number }): void {
+    const meta = this.registry.list().find(entry => entry.id === this.sessionId)
+    const title = meta?.title ?? ''
+    const messageCount = meta?.messageCount ?? 0
+    const applied = patch({ title, messageCount })
+    this.registry.touch(this.sessionId, applied)
+  }
+
+  private async runCommand(name: string, args: string): Promise<void> {
+    const spec = lookupCommand(name)
+    if (spec === undefined) {
+      this.apply({ type: 'error', message: `unknown command /${name} — try /help` })
+      return
+    }
+    const state = this.store.getState()
+    switch (spec.name) {
+      case 'help':
+        this.apply({ type: 'notice', message: COMMANDS.map(c => `/${c.name}`).join(' ') })
+        break
+      case 'clear':
+        this.clear()
+        break
+      case 'status':
+        this.apply({
+          type: 'notice',
+          message:
+            `session ${shortId(this.sessionId)} · ${state.connection} · ${state.phase}`
+            + ` · ${state.provider}/${state.model || '?'} · turn ${state.turn} step ${state.step}`,
+        })
+        break
+      case 'context':
+        this.apply({
+          type: 'notice',
+          message:
+            `turn ${state.turn} step ${state.step} · ${state.todos.length} todos`
+            + ` · ${state.items.length} items · ${state.activeToolCount} tools running`
+            + (state.title !== '' ? ` · "${state.title}"` : ''),
+        })
+        break
+      case 'new':
+        this.newSession()
+        break
+      case 'resume':
+        if (args !== '') this.resumeSession(args)
+        else this.hooks.openModal?.('sessions')
+        break
+      case 'sessions':
+        this.hooks.openModal?.('sessions')
+        break
+      case 'model': {
+        if (args === '') {
+          this.hooks.openModal?.('model')
+          break
+        }
+        const model = this.options.models.find(candidate => candidate === args)
+        if (model === undefined) {
+          this.apply({ type: 'error', message: `unknown model ${args} — ${this.options.models.join(' | ')}` })
+          break
+        }
+        await this.switchModel(model)
+        break
+      }
+      case 'exit':
+        this.hooks.onExit?.()
+        break
+    }
+  }
+}
+
+function randomPart(): string {
+  return crypto.randomUUID().replaceAll('-', '').slice(0, 12)
+}
+
+function shortId(id: string): string {
+  return id.length > 14 ? id.slice(0, 14) : id
+}
