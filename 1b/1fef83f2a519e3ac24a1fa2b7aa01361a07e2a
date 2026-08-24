@@ -1,0 +1,25 @@
+bin/dsh-tui.js
+  e8cbb2f45072f1b7 2,4-20
+scripts/smoke.mjs
+  e8cbb2f45072f1b7 18-19,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "1b1fef83f2a519e3ac24a1fa2b7aa01361a07e2a",
+  "prompts": {
+    "e8cbb2f45072f1b7": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a03216-0024-7c9e-a526-99ba322b3e98",
+        "model": "deepseek-v4-flash-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 21,
+      "total_deletions": 14,
+      "accepted_lines": 21,
+      "overriden_lines": 0
+    }
+  }
+}
