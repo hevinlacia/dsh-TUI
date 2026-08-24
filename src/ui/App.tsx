@@ -1,5 +1,5 @@
 /**
- * Root Ink layout: status line / chat area / input line (+ transient gloss).
+ * Root Ink layout: chat/splash area → notice → input → rich status footer.
  * @module dsh-tui/ui/App
  */
 
@@ -13,6 +13,7 @@ import { InputBox } from './InputBox.js'
 import { SessionBrowser } from './SessionBrowser.js'
 import { ModelSwitch } from './ModelSwitch.js'
 import { NoticeLine } from './NoticeLine.js'
+import { Splash } from './Splash.js'
 
 /** Modal state shared between controller commands and the UI. */
 export type Modal = 'none' | 'sessions' | 'model'
@@ -26,12 +27,16 @@ export function App(props: {
   const { controller, modal, setModal } = props
   const state = useStore(controller.getState(), s => s)
   const [thinkingOpen, setThinkingOpen] = useState(false)
+  const gitBranch = controller.gitBranch()
+  const cwd = controller.options.cwd
+  const empty = state.items.length === 0
 
   return (
     <Box flexDirection="column" height="100%">
-      <StatusBar state={state} />
-      <Box flexGrow={1} flexShrink={1}>
-        <MessageList state={state} thinkingOpen={thinkingOpen} />
+      <Box flexGrow={1} flexShrink={1} flexDirection="column">
+        {empty
+          ? <Splash model={state.model} effort={state.effort} cwd={cwd} gitBranch={gitBranch} />
+          : <MessageList state={state} thinkingOpen={thinkingOpen} />}
       </Box>
       <NoticeLine state={state} />
       <InputBox
@@ -39,6 +44,7 @@ export function App(props: {
         modalOpen={modal !== 'none'}
         onToggleThinking={() => setThinkingOpen(open => !open)}
       />
+      <StatusBar state={state} cwd={cwd} gitBranch={gitBranch} />
       {modal === 'sessions' && (
         <SessionBrowser
           sessions={controller.sessions()}
