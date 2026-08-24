@@ -43,6 +43,8 @@ export type ChatItem =
     pending: boolean
     usage?: TokenUsage
     interrupted?: boolean
+    /** Wall-clock ms when the first thinking delta for this item arrived. */
+    thinkingStartedAt?: number
     time: number
   }
   | {
@@ -70,7 +72,7 @@ export type TuiEvent =
   | { type: 'status'; phase: AgentPhase; detail?: string }
   | { type: 'user-message'; id: string; text: string; time: number }
   | { type: 'assistant-delta'; id: string; text: string }
-  | { type: 'thinking-delta'; id: string; text: string }
+  | { type: 'thinking-delta'; id: string; text: string; time: number }
   | {
     type: 'assistant-message'
     id: string
@@ -82,13 +84,21 @@ export type TuiEvent =
   }
   | { type: 'tool-start'; id: string; callId: string; name: string; args: string; time: number }
   | { type: 'tool-finish'; id: string; ok: boolean; error?: { name?: string; code?: string }; output?: string }
-  | { type: 'turn-start'; turn: number }
+  | { type: 'turn-start'; turn: number; time: number }
   | { type: 'turn-end'; turn: number; reason: string }
   | { type: 'step-start'; turn: number; step: number }
   | { type: 'step-end'; turn: number; step: number }
   | { type: 'title'; title: string }
   | { type: 'todos'; todos: TodoItem[] }
-  | { type: 'context'; provider: string; model: string }
+  | {
+    type: 'context'
+    provider?: string
+    model?: string
+    /** Advertised combined request+response context window in tokens. */
+    contextWindow?: number
+    /** Adapter-selected reasoning effort, when surfaced. */
+    effort?: string
+  }
   | { type: 'error'; message: string }
   | { type: 'notice'; message: string }
 
@@ -137,7 +147,7 @@ function eventsFor(event: SessionEvent): TuiEvent[] {
       const id = ItemIds.assistant(num(data.turn, 1), num(data.step, 1))
       switch (chunk?.type) {
         case 'reasoning-delta':
-          return [{ type: 'thinking-delta', id, text: str(chunk.text) }]
+          return [{ type: 'thinking-delta', id, text: str(chunk.text), time: event.time }]
         case 'text-delta':
           return [{ type: 'assistant-delta', id, text: str(chunk.text) }]
         case 'finish': {
@@ -196,7 +206,7 @@ function eventsFor(event: SessionEvent): TuiEvent[] {
       }]
     }
     case 'turn/start':
-      return [{ type: 'turn-start', turn: num(data.turn, 1) }]
+      return [{ type: 'turn-start', turn: num(data.turn, 1), time: event.time }]
     case 'turn/end': {
       const reason = data.reason as { kind?: string; error?: { message?: string } } | undefined
       const out: TuiEvent[] = [{ type: 'turn-end', turn: num(data.turn, 1), reason: reason?.kind ?? 'unknown' }]
@@ -218,7 +228,22 @@ function eventsFor(event: SessionEvent): TuiEvent[] {
       return [{ type: 'todos', todos }]
     }
     case 'request/context':
-      return [{ type: 'context', provider: str(data.provider), model: str(data.model) }]
+      return [{
+        type: 'context',
+        provider: str(data.provider),
+        model: str(data.model),
+        ...(typeof data.contextWindow === 'number' ? { contextWindow: data.contextWindow } : {}),
+      }]
+    case 'request/header': {
+      const header = data.header as { config?: { reasoningEffort?: unknown } } | undefined
+      const effort = header?.config?.reasoningEffort
+      return [{
+        type: 'context',
+        provider: str(data.provider ?? ''),
+        model: str(data.model ?? ''),
+        ...(typeof effort === 'string' ? { effort } : {}),
+      }]
+    }
     default:
       return []
   }

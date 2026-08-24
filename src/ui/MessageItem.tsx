@@ -1,6 +1,6 @@
 /**
- * R2/A2 — one user or assistant message, with the assistant's collapsible
- * thinking block (A2). Streaming assistant items animate with a caret.
+ * R2/A2 — user messages on a highlighted bar, assistant messages with a
+ * leading collapsible thinking block and a colored bullet on the text line.
  * @module dsh-tui/ui/MessageItem
  */
 
@@ -8,6 +8,7 @@ import type { JSX } from 'react'
 import { Box, Text } from 'ink'
 import type { ChatItem } from '../events/types.js'
 import { ThinkingBlock } from './ThinkingBlock.js'
+import { palette } from './theme.js'
 
 /** Renders one user or assistant message item. */
 export function MessageItem(props: { item: ChatItem; thinkingOpen: boolean }): JSX.Element {
@@ -15,32 +16,36 @@ export function MessageItem(props: { item: ChatItem; thinkingOpen: boolean }): J
   if (item.kind === 'tool') return <></>
   if (item.kind === 'user') {
     return (
-      <Box flexDirection="column">
-        <Box>
-          <Text color="cyan" bold>you › </Text>
-        </Box>
+      <Box backgroundColor={palette.userBar} paddingX={1} paddingY={0} width="100%">
+        <Text color={palette.userPrefix}>{'> '}</Text>
         <Text wrap="wrap">{item.text}</Text>
       </Box>
     )
   }
-  // assistant
+  // assistant — thinking block leads, then `● text` inline.
+  const pending = item.pending
+  const bullet = (
+    <Box>
+      <Text color={palette.assistantBullet}>{'● '}</Text>
+      {pending && <Text color={palette.assistantName} dimColor>{'…'}</Text>}
+    </Box>
+  )
   return (
-    <Box flexDirection="column">
-      <Box>
-        <Text color="green" bold>assistant{item.pending ? <Text>…</Text> : ''}</Text>
-        {item.pending && <Text color="green" dimColor> ▍</Text>}
-      </Box>
+    <Box flexDirection="column" paddingLeft={1}>
       {item.thinking !== '' && (
-        <ThinkingBlock thinking={item.thinking} open={thinkingOpen || item.pending} />
+        <ThinkingBlock thinking={item.thinking} open={thinkingOpen || pending} startedAt={item.thinkingStartedAt} />
       )}
-      {item.text === '' && item.pending
-        ? <Text dimColor>…</Text>
-        : <Text wrap="wrap">{item.text}</Text>}
-      {item.usage !== undefined && !item.pending && (
-        <Text dimColor>
-          {' '}({fmtUsage(item.usage)})
-        </Text>
-      )}
+      <Box>
+        {bullet}
+        <Box flexDirection="column">
+          {item.text === '' && pending
+            ? <Text dimColor>…</Text>
+            : <Text wrap="wrap">{item.text}</Text>}
+          {item.usage !== undefined && !pending && (
+            <Text dimColor>{fmtUsage(item.usage)}</Text>
+          )}
+        </Box>
+      </Box>
     </Box>
   )
 }
@@ -50,5 +55,5 @@ function fmtUsage(usage: { inputTokens?: number; outputTokens?: number; reasonin
   if (usage.inputTokens !== undefined) parts.push(`${usage.inputTokens} in`)
   if (usage.outputTokens !== undefined) parts.push(`${usage.outputTokens} out`)
   if (usage.reasoningTokens !== undefined) parts.push(`${usage.reasoningTokens} think`)
-  return parts.join(' · ')
+  return `(${parts.join(' · ')})`
 }

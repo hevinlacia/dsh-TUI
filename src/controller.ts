@@ -5,6 +5,7 @@
  * @module dsh-tui/controller
  */
 
+import { execFileSync } from 'node:child_process'
 import type { CliOptions } from './config.js'
 import { COMMANDS, lookupCommand, parseInput } from './commands.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
@@ -38,6 +39,20 @@ export class SessionController {
     this.registry = new SessionRegistry(options.registryPath)
     this.registry.load()
     this.store = new Store(initialState(this.sessionId))
+  }
+
+  /** Local git branch for the workspace cwd (empty when not a repo). */
+  gitBranch(): string {
+    try {
+      const cwd = this.options.cwd
+      const result = execFileSync('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      return result.trim()
+    } catch {
+      return ''
+    }
   }
 
   /** The store UI components read. */
