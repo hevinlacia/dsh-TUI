@@ -1,4 +1,20 @@
 #!/usr/bin/env node
-import { runCli } from '../lib/cli.js'
+import { spawn } from 'node:child_process'
 
-process.exitCode = await runCli(process.argv.slice(2))
+const child = spawn('dsh', ['--profile', 'dsh-tui', ...process.argv.slice(2)], {
+  stdio: 'inherit',
+  env: process.env,
+})
+
+child.on('error', error => {
+  process.stderr.write(`dsh-tui: failed to launch dsh --profile dsh-tui: ${error.message}\n`)
+  process.exit(1)
+})
+
+child.on('exit', (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal)
+    return
+  }
+  process.exit(code ?? 0)
+})

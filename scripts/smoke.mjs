@@ -2,10 +2,10 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
 const bin = new URL('../bin/dsh-tui.js', import.meta.url)
-const lib = new URL('../lib/cli.js', import.meta.url)
+const pluginLib = new URL('../lib/index.js', import.meta.url)
 
-if (!existsSync(lib)) {
-  throw new Error('lib/cli.js does not exist; run pnpm build before smoke')
+if (!existsSync(pluginLib)) {
+  throw new Error('lib/index.js does not exist; run pnpm build before smoke')
 }
 
 function run(args) {
@@ -15,18 +15,13 @@ function run(args) {
 }
 
 const help = run(['--help'])
-if (help.status !== 0 || !help.stdout.includes('Usage:') || !help.stdout.includes('--profile')) {
-  throw new Error(`help smoke failed\nstdout=${help.stdout}\nstderr=${help.stderr}`)
-}
-
-const dry = run(['--dry-run', '--profile', 'headless', 'hello world'])
-if (dry.status !== 0 || !dry.stdout.trim().startsWith("dsh --profile headless")) {
-  throw new Error(`dry-run smoke failed\nstdout=${dry.stdout}\nstderr=${dry.stderr}`)
+if (help.status !== 0 || !help.stdout.includes('dsh-tui profile front door') || !help.stdout.includes('--resume')) {
+  throw new Error(`profile help smoke failed\nstdout=${help.stdout}\nstderr=${help.stderr}`)
 }
 
 const noTty = run([])
 if (noTty.status !== 2 || !noTty.stderr.includes('no task provided')) {
-  throw new Error(`non-tty smoke failed\nstatus=${noTty.status}\nstdout=${noTty.stdout}\nstderr=${noTty.stderr}`)
+  throw new Error(`non-tty profile smoke failed\nstatus=${noTty.status}\nstdout=${noTty.stdout}\nstderr=${noTty.stderr}`)
 }
 
 console.log('smoke ok')
