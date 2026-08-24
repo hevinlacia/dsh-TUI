@@ -1,0 +1,31 @@
+{
+  "name": "dsh-tui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent minimal terminal UI for DeepSeek Harness.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "dsh-tui": "./bin/dsh-tui.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.19"
+  },
+  "packageManager": "pnpm@11.23.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node scripts/clean.mjs",
+    "dev": "pnpm run build && node ./bin/dsh-tui.js",
+    "smoke": "node scripts/smoke.mjs",
+    "check": "pnpm run build && pnpm run smoke"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}
