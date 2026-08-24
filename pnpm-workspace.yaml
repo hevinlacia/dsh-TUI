@@ -1,0 +1,14 @@
+packages:
+  - .
+
+allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local': set this to true or false
+  '@google/genai': set this to true or false
+  koffi: set this to true or false
+  node-pty: set this to true or false
+  protobufjs: set this to true or false
+
+# Native extras (koffi/node-pty/@google-genai/protobufjs) are optional for the
+# runtime boot; skip their postinstall builds without failing the install.
+strictDepBuilds: false
+verifyDepsBeforeRun: false

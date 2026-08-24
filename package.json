@@ -1,34 +1,14 @@
 {
   "name": "dsh-tui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Independent minimal terminal UI for DeepSeek Harness.",
+  "description": "Independent terminal UI for DeepSeek Harness (JSON-RPC runtime client).",
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
     "dsh-tui": "./bin/dsh-tui.js"
   },
   "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/index.js"
-    },
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "bin",
-    "lib",
-    "cordis.patch.yml",
-    "README.md"
-  ],
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
   "engines": {
     "node": ">=22.19"
   },
@@ -37,11 +17,38 @@
     "build": "tsc -p tsconfig.json",
     "clean": "node scripts/clean.mjs",
     "dev": "pnpm run build && node ./bin/dsh-tui.js",
+    "probe": "node scripts/probe-runtime.mjs",
     "smoke": "node scripts/smoke.mjs",
     "check": "pnpm run build && pnpm run smoke"
   },
+  "dependencies": {
+    "ink": "^7.1.1",
+    "react": "^19.2.0"
+  },
   "devDependencies": {
+    "@deepseek-ai/dsh-agent-spine-demo": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-bash-local": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-compaction-basic": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-credentials-local": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-fs-local": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-fs-observation-policy": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-llm-deepseek": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-llm-pi-ai": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-sdk-jsonrpc-demo": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-sdk-jsonrpc-server": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-session-checkpoint-policy": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-settings-file": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-subagent": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-subagent-spawn-in-process": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-subprocess-local": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-token-meter": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-tool-fs": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-tool-str-replace-editor": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-tool-subagent": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-tool-todo": "0.1.1-rc.2",
     "@types/node": "^24.3.0",
+    "@types/react": "^19.2.0",
     "typescript": "^5.9.2"
   }
 }

@@ -1,31 +1,91 @@
-import { parseArgs } from './args.js'
-import { helpText, VERSION } from './help.js'
-import { runHarnessTask } from './harness.js'
-import { runInteractive } from './tui.js'
+/**
+ * CLI entry: argument parsing and mode dispatch.
+ *
+ * Modes:
+ *   interactive         no positional task    → Ink TUI
+ *   one-shot            positional task given → run once, print the reply
+ *   keyless replay      `--replay <jsonl>`    → deterministic text render
+ *   dry-run             `--dry-run [task]`    → print the spawn command
+ * @module dsh-tui/cli
+ */
 
-export async function runCli(argv: readonly string[]): Promise<number> {
+import { CliUsageError, parseOptions } from './config.js'
+import { runReplay } from './replay.js'
+
+const VERSION = '0.2.0'
+
+const HELP = `dsh-tui — DeepSeek Harness terminal UI
+
+Usage:
+  dsh-tui [task] [options]
+
+Modes:
+  dsh-tui                     interactive TUI
+  dsh-tui "one-shot task"     run once, print the reply
+  dsh-tui --replay file.jsonl keyless replay of a notification fixture
+
+Options:
+  --jsonrpc-bin <path>  runtime bin (DSH_TUI_JSONRPC_BIN wins)
+  --cordis <path>       runtime composition (DSH_TUI_CORDIS wins)
+  --cwd <dir>           session workspace (DSH_TUI_CWD)
+  --replay <file>       replay a session-event JSONL (no runtime)
+  --dry-run             print the spawn command and exit
+  -h, --help            show this help
+  -v, --version         show the version
+
+Env:
+  DSH_TUI_PROVIDER      provider route (default deepseek-official)
+  DSH_TUI_MODEL         model for new sessions
+  DSH_TUI_MODELS        comma-separated switchable models
+  DSH_TUI_CORDIS        runtime composition path
+  DSH_TUI_JSONRPC_BIN   runtime executable
+
+Commands inside the TUI:
+  /help /status /context /new /resume [id] /sessions /model [name] /clear /exit
+`
+
+/** Process entry point. */
+export async function main(): Promise<void> {
+  let options
   try {
-    const options = parseArgs(argv)
-    if (options.help) {
-      process.stdout.write(helpText())
-      return 0
-    }
-    if (options.version) {
-      process.stdout.write(`${VERSION}\n`)
-      return 0
-    }
-    if (options.task !== undefined) {
-      const result = await runHarnessTask(options.task, options)
-      return result.code
-    }
-    if (!process.stdin.isTTY || !process.stdout.isTTY) {
-      process.stderr.write('dsh-tui: no task provided and stdin/stdout are not interactive.\n')
-      process.stderr.write('Run `dsh-tui --help` for usage.\n')
-      return 2
-    }
-    return await runInteractive(options)
+    options = parseOptions(process.argv.slice(2))
   } catch (error) {
-    process.stderr.write(`dsh-tui: ${error instanceof Error ? error.message : String(error)}\n`)
-    return 1
+    if (error instanceof CliUsageError) {
+      if (error.kind === 'help') {
+        process.stdout.write(HELP)
+        process.exit(0)
+      }
+      if (error.kind === 'version') {
+        process.stdout.write(`dsh-tui ${VERSION}\n`)
+        process.exit(0)
+      }
+      process.stderr.write(`dsh-tui: ${error.message}\n\n${HELP}`)
+      process.exit(2)
+    }
+    throw error
   }
+
+  if (options.replay !== undefined) {
+    try {
+      process.stdout.write(`${runReplay(options.replay)}\n`)
+      process.exit(0)
+    } catch (error) {
+      process.stderr.write(`dsh-tui: replay failed: ${error instanceof Error ? error.message : String(error)}\n`)
+      process.exit(2)
+    }
+  }
+
+  const { runInteractive } = await import('./index.js')
+  const { runOneShot } = await import('./oneshot.js')
+  if (options.task !== undefined) {
+    const code = await runOneShot(options)
+    process.exit(code)
+  }
+  const code = await runInteractive(options)
+  process.exit(code)
 }
+
+main().catch(error => {
+  process.stderr.write(`dsh-tui: fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`)
+  process.exit(1)
+})
