@@ -13,6 +13,8 @@ export interface CommandSpec {
   description: string
   /** Commands that need a live runtime to make sense. */
   needsRuntime?: boolean
+  /** When set, confirming the command opens a second-level option submenu. */
+  submenu?: 'models'
 }
 
 /** The phase-1 command set. */
@@ -24,7 +26,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   { name: 'new', usage: '/new', description: 'start a fresh session' },
   { name: 'resume', usage: '/resume [id]', description: 'resume a session (opens browser without id)' },
   { name: 'sessions', usage: '/sessions', description: 'browse and resume past sessions' },
-  { name: 'model', usage: '/model [name]', description: 'show or switch the model for new sessions' },
+  { name: 'model', usage: '/model [name]', description: 'show or switch the model for new sessions', submenu: 'models' },
   { name: 'exit', usage: '/exit', description: 'quit dsh-tui' },
 ]
 

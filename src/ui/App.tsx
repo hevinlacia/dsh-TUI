@@ -48,6 +48,7 @@ export function App(props: {
       <InputBox
         controller={controller}
         modalOpen={modal !== 'none'}
+        currentModel={state.model}
         onToggleThinking={() => setThinkingOpen(open => !open)}
       />
       <StatusBar state={state} cwd={cwd} gitBranch={gitBranch} />
