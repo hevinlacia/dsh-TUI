@@ -1,0 +1,27 @@
+src/controller.ts
+  4a39bee216722927 132,145,207
+src/commandRunner.ts
+  4a39bee216722927 60,64
+src/plugin.tsx
+  4a39bee216722927 18-19,32,146-148,186,206-251,359-366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "ee6e953c3117ca19eff4d0740e923ef53d538758",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "medium-model-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 66,
+      "total_deletions": 23,
+      "accepted_lines": 66,
+      "overriden_lines": 0
+    }
+  }
+}
