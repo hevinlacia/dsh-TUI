@@ -47,6 +47,7 @@
     "fzstd": "^0.1.1",
     "ink": "^7.1.1",
     "react": "^19.2.0",
+    "string-width": "^8.2.2",
     "yaml": "^2.9.0"
   },
   "peerDependencies": {

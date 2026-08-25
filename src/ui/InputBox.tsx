@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { Box, Text, useInput, useStdout } from 'ink'
+import stringWidth from 'string-width'
 import type { TuiController } from './controller.js'
 import { complete, type CompletionResult } from '../completion.js'
 import { commandNames, COMMANDS } from '../commands.js'
@@ -55,15 +56,89 @@ function lineEnd(value: string, starts: number[], line: number): number {
   return next === undefined ? value.length : next - 1
 }
 
-/** Move the cursor one logical line up/down, clamping the column. */
-function moveLine(value: string, cursor: number, delta: -1 | 1): number {
-  const starts = lineStarts(value)
-  const line = lineIndexOf(value, cursor)
-  const target = line + delta
-  if (target < 0 || target >= starts.length) return cursor
-  const start = starts[target]!
-  const col = Math.min(colIndexOf(value, cursor), lineEnd(value, starts, target) - start)
-  return start + col
+/** One visual row of the input text: its char range in `value` + display text. */
+interface VisualRow {
+  start: number
+  end: number
+  text: string
+}
+
+/**
+ * Split `value` into visual rows for a given terminal content width (CJK-aware
+ * via string-width). Hard `\n` forces a row break; a line longer than `width`
+ * wraps. This mirrors how Ink wraps the input `<Text>`, so up/down can move
+ * between the rows the user actually sees.
+ */
+function wrapRows(value: string, width: number): VisualRow[] {
+  const rows: VisualRow[] = []
+  const lines = value.split('\n')
+  let index = 0
+  for (const line of lines) {
+    if (line === '') {
+      rows.push({ start: index, end: index, text: '' })
+      index += 1
+      continue
+    }
+    let rowStart = index
+    let rowText = ''
+    let col = 0
+    for (const ch of line) {
+      const w = stringWidth(ch)
+      if (col + w > width && col > 0) {
+        rows.push({ start: rowStart, end: index, text: rowText })
+        rowStart = index
+        rowText = ''
+        col = 0
+      }
+      rowText += ch
+      col += w
+      index += 1
+    }
+    rows.push({ start: rowStart, end: index, text: rowText })
+    index += 1 // the \n after this line (harmless after the last line)
+  }
+  return rows
+}
+
+/** Map a char cursor to (visual row, column-in-width). */
+function cursorPosition(rows: VisualRow[], cursor: number): { row: number; col: number } {
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]!
+    // Strict `<`: a cursor exactly at a row boundary belongs to the NEXT row
+    // (col 0), so pressing up there moves into the row above instead of
+    // no-op'ing at the previous row's tail.
+    if (cursor < row.end) {
+      return { row: r, col: stringWidth(row.text.slice(0, cursor - row.start)) }
+    }
+  }
+  const last = rows[rows.length - 1]!
+  return { row: rows.length - 1, col: stringWidth(last.text) }
+}
+
+/** Map a (visual row, column-in-width) back to a char cursor, clamped. */
+function positionToCursor(rows: VisualRow[], row: number, col: number): number {
+  const r = Math.max(0, Math.min(row, rows.length - 1))
+  const target = rows[r]!
+  const text = target.text
+  let width = 0
+  let idx = 0
+  for (const ch of text) {
+    const w = stringWidth(ch)
+    if (width + w > col) break
+    width += w
+    idx += 1
+  }
+  return target.start + idx
+}
+
+/** Move the cursor one VISUAL row up/down, preserving the column (in width). */
+function moveLineVisual(value: string, cursor: number, delta: -1 | 1, width: number): number {
+  const rows = wrapRows(value, width)
+  if (rows.length <= 1) return cursor
+  const { row, col } = cursorPosition(rows, cursor)
+  const target = row + delta
+  if (target < 0 || target >= rows.length) return cursor
+  return positionToCursor(rows, target, col)
 }
 
 /** Input box: editing, history, Tab completion, command menu + submenu. */
@@ -126,6 +201,9 @@ export function InputBox(props: {
   }
 
   const ruleWidth = Math.max(0, stdout?.columns ?? 80)
+  // The value `<Text>` content width: terminal columns minus 1 col of paddingX
+  // each side and the `> `/`/ ` prompt (2 cols).
+  const valueWidth = Math.max(1, ruleWidth - 4)
 
   useInput((input, key) => {
     if (modalOpen) return // modals own the keyboard while open
@@ -240,16 +318,18 @@ export function InputBox(props: {
       return
     }
     if (key.upArrow) {
-      if (value.includes('\n')) {
-        setCursor(position => moveLine(value, position, -1))
+      // Multi-row text (wrapped long line or `\n`): move the caret between the
+      // visual rows the user sees. Single-row: browse history as before.
+      if (wrapRows(value, valueWidth).length > 1) {
+        setCursor(position => moveLineVisual(value, position, -1, valueWidth))
       } else {
         navigateHistory(-1, historyRef.current, setText, applyText, historyIndexRef)
       }
       return
     }
     if (key.downArrow) {
-      if (value.includes('\n')) {
-        setCursor(position => moveLine(value, position, 1))
+      if (wrapRows(value, valueWidth).length > 1) {
+        setCursor(position => moveLineVisual(value, position, 1, valueWidth))
       } else {
         navigateHistory(1, historyRef.current, setText, applyText, historyIndexRef)
       }
