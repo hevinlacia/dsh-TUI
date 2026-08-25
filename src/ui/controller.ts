@@ -10,6 +10,11 @@ import type { TuiState } from '../events/reducer.js'
 import type { Store } from '../state/store.js'
 import type { SessionRegistry } from '../sessions.js'
 
+/** The UI-facing decision for a pending model interaction (approval/question). */
+export type InteractionDecision =
+  | { kind: 'approval'; outcome: 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable' }
+  | { kind: 'question'; answer: { answers: { id: string; selected: string[]; custom?: string }[] } }
+
 /** The minimal surface the TUI reads/drives. */
 export interface TuiController {
   readonly options: CliOptions
@@ -25,4 +30,8 @@ export interface TuiController {
   resumeSession(id: string): void
   /** Switch the model (and its provider) for new sessions. */
   switchModel(option: ModelOption): Promise<void>
+  /** Resolve the pending model-facing interaction (approval/question). */
+  resolveInteraction(seq: number, decision: InteractionDecision): boolean
+  /** Cancel the pending model-facing interaction (treated as user-declined). */
+  cancelInteraction(seq: number): void
 }

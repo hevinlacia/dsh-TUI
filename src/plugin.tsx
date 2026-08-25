@@ -23,6 +23,10 @@ import {
   createUserMessage,
   Schema,
   type Agent,
+  type ApprovalOutcome,
+  type ApprovalRequest,
+  type AskUserQuestionAnswer,
+  type AskUserQuestionRequest,
   type ContentBlock,
   type Context,
   type Session,
@@ -37,11 +41,11 @@ import { eventsFor, type TuiEvent } from './events/types.js'
 import type { SessionEvent as LocalSessionEvent } from './harness/types.js'
 import { Store } from './state/store.js'
 import { App, type Modal } from './ui/App.js'
-import type { TuiController } from './ui/controller.js'
+import type { TuiController, InteractionDecision } from './ui/controller.js'
 
 export const name = 'dsh-tui'
-/** The agent registry service the TUI creates/resumes its agent through. */
-export const inject = ['agents']
+/** The agent registry + user-question service the TUI drives. */
+export const inject = ['agents', 'userQuestions']
 
 /** dsh-tui plugin configuration. */
 export interface Config {
@@ -83,6 +87,10 @@ class InProcessController implements TuiController, CommandHost {
   private readonly currentId: { current: string }
   private defaultProvider: string
   private defaultModel: string
+  /** Monotonic id for pending model-facing interactions (approval/question). */
+  private interactionSeq = 0
+  /** Pending interaction resolvers, keyed by seq (the agent blocks one at a time). */
+  private readonly pendingInteractions = new Map<number, { kind: 'approval' | 'question'; resolve: (result: unknown) => void }>()
 
   constructor(
     private readonly ctx: Context,
@@ -260,6 +268,9 @@ class InProcessController implements TuiController, CommandHost {
     if (previous) void previous.dispose()
     const sessionId = handle.agent.id
     this.currentId.current = String(sessionId)
+    // Each agent gets its own scoped approval answerer (agent-scoped listeners
+    // only receive their own agent's requests).
+    this.registerApprovalAnswerer(handle.agent)
     this.store.setState(() => initialState(String(sessionId)))
     // Replay the durable log so a resumed session paints its history.
     for (const event of handle.agent.session.events) {
@@ -287,9 +298,88 @@ class InProcessController implements TuiController, CommandHost {
     }
   }
 
-  /** Register the durable feed; call once at boot. */
+  /** Register the durable feed + the UI-side interaction provider; call once. */
   subscribe(): void {
     this.ctx.on('session/event', (session, event) => this.onSessionEvent(session, event))
+    this.registerUserQuestionProvider()
+  }
+
+  // ── model-facing interactions (approval / user-question) ───────────────────
+
+  /** Answer approval requests for one agent (registered on its scoped ctx). */
+  private registerApprovalAnswerer(agent: Agent): void {
+    agent.ctx.on('approval/request', async (req: ApprovalRequest) => this.answerApproval(req))
+  }
+
+  /** Register the single user-question provider that surfaces `ask_user_question`. */
+  private registerUserQuestionProvider(): void {
+    this.ctx.userQuestions.registerProvider({
+      ask: (request: AskUserQuestionRequest) => this.askQuestion(request),
+    })
+  }
+
+  /** Present an approval prompt and resolve when the user decides. */
+  private async answerApproval(req: ApprovalRequest): Promise<ApprovalOutcome> {
+    const seq = ++this.interactionSeq
+    this.apply({
+      type: 'interaction-open',
+      pending: {
+        kind: 'approval',
+        seq,
+        toolName: req.toolName,
+        reason: req.reason,
+        callId: req.callId,
+      },
+    })
+    return new Promise<ApprovalOutcome>(resolve => {
+      this.pendingInteractions.set(seq, { kind: 'approval', resolve: result => resolve(result as ApprovalOutcome) })
+    })
+  }
+
+  /** Present a user-question prompt and resolve when the user answers. */
+  private async askQuestion(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
+    const seq = ++this.interactionSeq
+    this.apply({
+      type: 'interaction-open',
+      pending: {
+        kind: 'question',
+        seq,
+        items: request.questions.map(item => ({
+          id: item.id,
+          question: item.question,
+          detail: item.detail,
+          header: item.header,
+          options: (item.options ?? []).map(option => ({ label: option.label, description: option.description })),
+          multiSelect: item.multiSelect ?? false,
+        })),
+      },
+    })
+    return new Promise<AskUserQuestionAnswer>(resolve => {
+      this.pendingInteractions.set(seq, { kind: 'question', resolve: result => resolve(result as AskUserQuestionAnswer) })
+    })
+  }
+
+  /** Resolve the pending interaction with the user's decision (UI → service). */
+  resolveInteraction(seq: number, decision: InteractionDecision): boolean {
+    const entry = this.pendingInteractions.get(seq)
+    if (entry === undefined) return false
+    this.pendingInteractions.delete(seq)
+    if (entry.kind === 'approval') {
+      entry.resolve(decision.kind === 'approval' ? decision.outcome : 'rejected')
+    } else {
+      entry.resolve(decision.kind === 'question' ? decision.answer : { answers: [] })
+    }
+    this.apply({ type: 'interaction-close' })
+    return true
+  }
+
+  /** Cancel the pending interaction (treat as user-declined / aborted). */
+  cancelInteraction(seq: number): void {
+    const entry = this.pendingInteractions.get(seq)
+    if (entry === undefined) return
+    this.pendingInteractions.delete(seq)
+    entry.resolve(entry.kind === 'approval' ? 'cancelled' : { answers: [] })
+    this.apply({ type: 'interaction-close' })
   }
 
   /** Submit a plain prompt via the agent. */

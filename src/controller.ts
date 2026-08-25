@@ -167,6 +167,14 @@ export class SessionController {
     this.store.setState(state => ({ ...state, items: [] }))
   }
 
+  /** No-op: the JSON-RPC runtime owns approvals/questions; never surfaced here. */
+  resolveInteraction(_seq: number, _decision: import('./ui/controller.js').InteractionDecision): boolean {
+    return false
+  }
+
+  /** No-op: the JSON-RPC runtime owns the interaction lifecycle. */
+  cancelInteraction(_seq: number): void {}
+
   /** Apply one TuiEvent through the reducer and sync registry metadata. */
   private apply(event: TuiEvent): void {
     this.store.setState(state => reduce(state, event))

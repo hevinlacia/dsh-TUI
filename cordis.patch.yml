@@ -42,7 +42,7 @@
     # otherwise a fresh one is created.
     - id: dsh-tui
       name: 'dsh-tui'
-      inject: ['agents']
+      inject: [agents, userQuestions]
       config:
         provider: !!js process.env.DSH_TUI_PROVIDER ?? undefined
         model: !!js process.env.DSH_TUI_MODEL ?? undefined

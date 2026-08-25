@@ -67,6 +67,41 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed'
 }
 
+/** A user-question choice offered by the model to the human. */
+export interface QuestionOption {
+  label: string
+  description?: string
+}
+
+/** One user-question rendered for the human to answer. */
+export interface QuestionItem {
+  id: string
+  question: string
+  detail?: string
+  header?: string
+  options: QuestionOption[]
+  multiSelect?: boolean
+}
+
+/** A pending permission decision the agent is blocked on. */
+export interface PendingApproval {
+  kind: 'approval'
+  seq: number
+  toolName: string
+  reason?: string
+  callId?: string
+}
+
+/** A pending user-question the agent is blocked on. */
+export interface PendingQuestion {
+  kind: 'question'
+  seq: number
+  items: QuestionItem[]
+}
+
+/** The model-facing interaction currently awaiting a human decision. */
+export type PendingInteraction = PendingApproval | PendingQuestion
+
 /** UI event union; each event is applied by the reducer in wire order. */
 export type TuiEvent =
   | { type: 'connected' }
@@ -103,6 +138,8 @@ export type TuiEvent =
   }
   | { type: 'error'; message: string }
   | { type: 'notice'; message: string }
+  | { type: 'interaction-open'; pending: PendingInteraction }
+  | { type: 'interaction-close' }
 
 /** Stable item ids used by the reducer to correlate streaming events. */
 export namespace ItemIds {

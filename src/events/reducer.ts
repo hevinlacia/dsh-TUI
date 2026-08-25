@@ -5,7 +5,7 @@
  * @module dsh-tui/events/reducer
  */
 
-import type { ChatItem, TodoItem } from './types.js'
+import type { ChatItem, TodoItem, PendingInteraction } from './types.js'
 import type { TokenUsage } from '../harness/types.js'
 import type { AgentPhase, ConnectionState, TuiEvent } from './types.js'
 
@@ -34,6 +34,8 @@ export interface TuiState {
   tokens: { input: number; output: number; reasoning: number }
   /** Wall-clock ms when the current turn/step began (footer elapsed). */
   turnStartedAt: number
+  /** The model-facing interaction waiting on a human decision, if any. */
+  pending: PendingInteraction | undefined
 }
 
 /** Fresh state for a session; keeps the previous chat items when resuming. */
@@ -56,6 +58,7 @@ export function initialState(sessionId: string): TuiState {
     contextWindow: 0,
     tokens: { input: 0, output: 0, reasoning: 0 },
     turnStartedAt: 0,
+    pending: undefined,
   }
 }
 
@@ -162,6 +165,10 @@ export function reduce(state: TuiState, event: TuiEvent): TuiState {
       return { ...state, error: event.message, phase: 'error' }
     case 'notice':
       return { ...state, notice: event.message }
+    case 'interaction-open':
+      return { ...state, pending: event.pending }
+    case 'interaction-close':
+      return { ...state, pending: undefined }
     default:
       // Unknown official event types (skills/goal/plan/approval etc.) are
       // filtered by the notification mapper; defensive no-op for any that

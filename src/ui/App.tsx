@@ -12,6 +12,7 @@ import { MessageList } from './MessageList.js'
 import { InputBox } from './InputBox.js'
 import { SessionBrowser } from './SessionBrowser.js'
 import { ModelSwitch } from './ModelSwitch.js'
+import { InteractionView } from './InteractionView.js'
 import { NoticeLine } from './NoticeLine.js'
 import { Splash } from './Splash.js'
 import { InfoPanel } from './InfoPanel.js'
@@ -31,6 +32,7 @@ export function App(props: {
   const gitBranch = controller.gitBranch()
   const cwd = controller.options.cwd
   const empty = state.items.length === 0
+  const pending = state.pending
 
   return (
     <Box flexDirection="column" height="100%">
@@ -45,9 +47,10 @@ export function App(props: {
           : <MessageList state={state} thinkingOpen={thinkingOpen} />}
       </Box>
       <NoticeLine state={state} />
+      {pending !== undefined && <InteractionView interaction={pending} controller={controller} />}
       <InputBox
         controller={controller}
-        modalOpen={modal !== 'none'}
+        modalOpen={modal !== 'none' || pending !== undefined}
         currentModel={state.model}
         onToggleThinking={() => setThinkingOpen(open => !open)}
       />
