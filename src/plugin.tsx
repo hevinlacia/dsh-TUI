@@ -371,11 +371,19 @@ class InProcessController implements TuiController, CommandHost {
         toolName: req.toolName,
         reason: req.reason,
         callId: req.callId,
+        args: this.toolArgsFor(req.callId),
       },
     })
     return new Promise<ApprovalOutcome>(resolve => {
       this.pendingInteractions.set(seq, { kind: 'approval', resolve: result => resolve(result as ApprovalOutcome) })
     })
+  }
+
+  /** The streamed tool card's arguments for a call id (so the user can preview before approving). */
+  private toolArgsFor(callId?: string): string | undefined {
+    if (callId === undefined) return undefined
+    const item = this.store.getState().items.find(candidate => candidate.kind === 'tool' && candidate.callId === callId)
+    return item !== undefined && item.kind === 'tool' && item.args !== '' ? item.args : undefined
   }
 
   /** Present a user-question prompt and resolve when the user answers. */

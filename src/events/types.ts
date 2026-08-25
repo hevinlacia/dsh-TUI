@@ -91,6 +91,8 @@ export interface PendingApproval {
   toolName: string
   reason?: string
   callId?: string
+  /** The tool call's arguments, when the streamed tool card has them. */
+  args?: string
 }
 
 /** A pending user-question the agent is blocked on. */

@@ -110,6 +110,9 @@ function renderApproval(interaction: Extract<PendingInteraction, { kind: 'approv
         {interaction.toolName}
         {interaction.reason !== undefined && interaction.reason !== '' ? ` · ${interaction.reason}` : ''}
       </Text>
+      {interaction.args !== undefined && interaction.args !== '' ? (
+        <Text color={palette.meta} wrap="truncate">参数: {interaction.args.length > 200 ? `${interaction.args.slice(0, 200)}…` : interaction.args}</Text>
+      ) : null}
       <Text color={palette.tip}>{KEY_HINTS}</Text>
     </>
   )
