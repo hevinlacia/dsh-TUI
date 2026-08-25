@@ -180,9 +180,15 @@ export function dataHome(): string {
   return `${base}/dsh-tui`
 }
 
-/** Stable runtime session-log root passed to the composition via env. */
+/**
+ * Stable runtime session-log root passed to the composition via env.
+ * Unified on the shared dsh session store (`$DSH_HOME/sessions`, default
+ * `~/.dsh/sessions`) so the standalone JSON-RPC client and the in-process
+ * plugin (and dsh web) list + resume the SAME sessions (#3 — de-fragment
+ * dual-mode storage).
+ */
 export function sessionRootOverride(): string {
-  return `${dataHome()}/runtime-sessions`
+  return `${dshHome()}/sessions`
 }
 
 /** `~/.local/share/dsh-tui/sessions.json` registry path. */
