@@ -1,0 +1,33 @@
+src/ui/InputBox.tsx
+  4a39bee216722927 150-151,155,213-217,345-349
+src/official.ts
+  4a39bee216722927 11,54
+src/controller.ts
+  4a39bee216722927 193-197
+src/ui/controller.ts
+  4a39bee216722927 49-50
+src/ui/App.tsx
+  4a39bee216722927 57
+src/plugin.tsx
+  4a39bee216722927 540-547
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "b6a87734a1afe6d8fad3ec33b36151a36cc19ec3",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "deepseek-v4-flash-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 31,
+      "total_deletions": 4,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}
