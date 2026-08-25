@@ -53,7 +53,7 @@ export function commandNames(): string[] {
   return COMMANDS.map(command => command.name)
 }
 
-/** The full model list a user can switch to. */
+/** The full model id list a user can switch to. */
 export function modelList(options: CliOptions): string[] {
-  return options.models
+  return options.modelOptions.map(option => option.id)
 }

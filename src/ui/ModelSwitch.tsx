@@ -1,22 +1,24 @@
 /**
- * W7 — model switch modal: pick a model from the configured list. Applies to
- * subsequently created sessions (protocol-level `initialize` re-send).
+ * W7 — model switch modal: pick a model from the configured list (from dsh's
+ * settings document). Applies to subsequently created sessions
+ * (protocol-level `initialize` re-send).
  * @module dsh-tui/ui/ModelSwitch
  */
 
 import { useState, type JSX } from 'react'
 import { Box, Text, useInput } from 'ink'
+import type { ModelOption } from '../config.js'
 
 /** Modal overlay for switching the model for new sessions. */
 export function ModelSwitch(props: {
-  models: string[]
+  options: ModelOption[]
   current: string
-  onSelect: (model: string) => void
+  onSelect: (option: ModelOption) => void
   onClose: () => void
 }): JSX.Element {
-  const { models, current, onSelect, onClose } = props
-  const [index, setIndex] = useState(Math.max(0, models.indexOf(current)))
-  const clamped = models.length === 0 ? 0 : index % models.length
+  const { options, current, onSelect, onClose } = props
+  const [index, setIndex] = useState(Math.max(0, options.findIndex(option => option.id === current)))
+  const clamped = options.length === 0 ? 0 : index % options.length
 
   useInput((input, key) => {
     if (key.escape || (key.ctrl && input === 'c')) {
@@ -24,12 +26,12 @@ export function ModelSwitch(props: {
       return
     }
     if (key.return) {
-      const picked = models[clamped]
+      const picked = options[clamped]
       if (picked !== undefined) onSelect(picked)
       return
     }
-    if (key.upArrow) setIndex(i => (i - 1 + models.length) % Math.max(1, models.length))
-    if (key.downArrow) setIndex(i => (i + 1) % Math.max(1, models.length))
+    if (key.upArrow) setIndex(i => (i - 1 + options.length) % Math.max(1, options.length))
+    if (key.downArrow) setIndex(i => (i + 1) % Math.max(1, options.length))
   })
 
   return (
@@ -47,12 +49,12 @@ export function ModelSwitch(props: {
       <Box>
         <Text bold color="green">model switch — applies to new sessions (/new)</Text>
       </Box>
-      {models.length === 0 && <Text dimColor>no models configured (DSH_TUI_MODELS)</Text>}
-      {models.map((model, row) => (
-        <Box key={model}>
+      {options.length === 0 && <Text dimColor>no models configured</Text>}
+      {options.map((option, row) => (
+        <Box key={`${option.provider}/${option.id}`}>
           <Text color={row === clamped ? 'green' : 'gray'}>{row === clamped ? '› ' : '  '}</Text>
-          <Text color={row === clamped ? 'green' : undefined}>{model}</Text>
-          {model === current && <Text dimColor> (current)</Text>}
+          <Text color={row === clamped ? 'green' : undefined}>{`${option.provider} · ${option.name}`}</Text>
+          {option.id === current && <Text dimColor> (current)</Text>}
         </Box>
       ))}
     </Box>
