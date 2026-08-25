@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { Box, Text, useInput, useStdout } from 'ink'
-import type { SessionController } from '../controller.js'
+import type { TuiController } from './controller.js'
 import { complete, type CompletionResult } from '../completion.js'
 import { commandNames, COMMANDS } from '../commands.js'
 import { submenuEntries, type SubmenuEntry } from '../submenu.js'
@@ -25,7 +25,7 @@ function clamp(index: number, length: number): number {
 
 /** One-line prompt with editing, history, Tab completion, command menu + submenu. */
 export function InputBox(props: {
-  controller: SessionController
+  controller: TuiController
   modalOpen: boolean
   /** Current session model — used to mark "(current)" in the model submenu. */
   currentModel: string
