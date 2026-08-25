@@ -1,24 +1,50 @@
-# dsh-tui bundle patch — the interactive terminal front door.
+# dsh-tui bundle patch — the interactive terminal front door over the
+# dsh-base layer. Applied after dsh-base's insert; rows here override base
+# rows by id, with the profile's own cordis.patch.yml and any `--patch`
+# overlays still to come.
 #
-# This is the plugin layer that `dsh plugin --profile <name> add dsh-tui`
-# applies over an official dsh-base profile. A top-level patch row targets an
-# EXISTING entry; to ADD a new plugin row use an `insert:` block (below) so the
-# loader mounts `dsh-tui` as a fresh entry over the dsh-base layer.
-#
-# NOTE: this patch assumes the official host plane (dsh-base) + the
-# agent-presets roster are mounted by the profile. Wire the in-process plugin
-# `apply` (src/plugin.tsx) against a running harness to verify.
+# The TUI creates (or resumes) its agent at runtime through the agent factory
+# and passes explicit agentOptions (provider/model) at that point. It does NOT
+# use the agent-presets roster, so the host tool rows dsh-base owns (tool-bash,
+# tool-fs, skills, plan, approval, sandbox, …) are inherited unchanged — the
+# new session needs them to actually work. To run, the agent only needs a model
+# route (llm-pi-ai / llm-deepseek via settings), credentials, and a stable
+# session store; all three come from dsh-base already.
 
-# The interactive front door. The plugin creates/resumes its agent at runtime
-# through the agent factory, subscribes to session events, and drives the TUI.
-# `DSH_TUI_RESUME_SESSION` resumes a specific session; otherwise a fresh one is
-# created.
+# ── surface-specific values over the dsh-base layer ─────────────────────────
+
+# The TUI deployment persona; DSH_TUI_PERSONA overrides the coding-agent
+# default (the base persona is empty).
+- id: system-prompt
+  config:
+    persona: !!js process.env.DSH_TUI_PERSONA ?? 'You are a coding agent.'
+
+# The plugin creates/resumes its agent at runtime — no declarative agents are
+# started at boot. Restate the base's empty default so this stays explicit.
+- id: agent-loop
+  config:
+    agents: []
+
+# Sessions live in the shared JSONL store (~/.dsh/sessions) — the same backend
+# dsh web writes — so `/resume` here and the web session list see each other.
+# The row comes from dsh-base; this override only re-points the root when
+# DSH_TUI_SESSION_ROOT is set (test isolation).
+- id: session-persistence-jsonl
+  config:
+    root: !!js process.env.DSH_TUI_SESSION_ROOT ?? dshHomePath('sessions')
+
+# ── the dsh-tui front door ──────────────────────────────────────────────────
+
 - insert:
+    # The interactive front door. The plugin creates/resumes its agent at
+    # runtime, subscribes to session events, and drives the TUI (see
+    # src/plugin.tsx). `DSH_TUI_RESUME_SESSION` resumes a specific session;
+    # otherwise a fresh one is created.
     - id: dsh-tui
       name: 'dsh-tui'
       inject: ['agents']
       config:
-        provider: !!js process.env.DSH_TUI_PROVIDER ?? 'deepseek-official'
+        provider: !!js process.env.DSH_TUI_PROVIDER ?? undefined
         model: !!js process.env.DSH_TUI_MODEL ?? undefined
         cwd: !!js process.env.DSH_TUI_CWD ?? undefined
         preset: !!js process.env.DSH_TUI_PRESET ?? undefined

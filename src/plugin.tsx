@@ -1,36 +1,41 @@
 /**
  * In-process Cordis plugin entry — the official-client front door.
  *
- * Mounted by a dsh profile (via `cordis.patch.yml`) alongside dsh-base. At
- * `apply`, it creates/resumes an Agent through the official agent factory,
- * subscribes to the in-process `session/event` feed, projects those events
- * through the existing reducer, and renders the TUI. DSH owns the agent,
- * session, tools, model, persistence and policy; the TUI only consumes.
+ * Mounted by a dsh profile (via `cordis.patch.yml`) over dsh-base. At `apply`
+ * it creates/resumes an Agent through the official agent factory, subscribes
+ * to the in-process `session/event` feed, projects those events through the
+ * existing reducer, and renders the TUI. DSH owns the agent, session, tools,
+ * model, persistence and policy; the TUI only consumes.
  *
- * Note: this is the in-process target. It is wired against the official
- * `@deepseek-ai/*` types and compiles; live boot needs a running harness
- * profile to verify (see AGENTS.md → Transition status).
+ * The controller implements the full slash-command vocabulary via the shared
+ * {@link ../commandRunner} and wires `/model`, `/new`, `/resume` to the
+ * official agent factory (create/resume). Live boot still needs a running
+ * harness profile to verify (see AGENTS.md → Transition status).
  * @module dsh-tui/plugin
  */
 
-import React, { type JSX } from 'react'
+import { execFileSync } from 'node:child_process'
+import React, { useState, type JSX } from 'react'
 import { render } from 'ink'
 import {
   createUserMessage,
   Schema,
+  type Agent,
   type ContentBlock,
   type Context,
   type Session,
   type SessionEvent,
   type SessionId,
 } from './official.js'
+import { loadDshSettings, type CliOptions, type ModelOption } from './config.js'
+import { parseInput } from './commands.js'
+import { runCommand, type CommandHost, type ModalKind } from './commandRunner.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
-import { eventsFor } from './events/types.js'
+import { eventsFor, type TuiEvent } from './events/types.js'
 import type { SessionEvent as LocalSessionEvent } from './harness/types.js'
 import { Store } from './state/store.js'
 import { App, type Modal } from './ui/App.js'
 import type { TuiController } from './ui/controller.js'
-import type { CliOptions, ModelOption } from './config.js'
 
 export const name = 'dsh-tui'
 /** The agent registry service the TUI creates/resumes its agent through. */
@@ -54,49 +59,198 @@ export const Config: Schema<Config> = Schema.object({
   sessionId: Schema.string().required(false),
 })
 
-/** A `TuiController` backed by an official in-process {@link Context} + agent. */
-class InProcessController implements TuiController {
+/** UI-only callbacks the controller drives (modal open / exit). */
+interface ControllerHooks {
+  openModal?: (modal: ModalKind) => void
+  onExit?: () => void
+}
+
+type AgentHandle = { agent: Agent; dispose(): Promise<void> }
+
+/**
+ * A `TuiController` + `CommandHost` backed by an official in-process
+ * {@link Context}. Owns the live {@link AgentHandle}; creates/resumes agents
+ * via the factory for `/new` and `/resume`, and carries the model default the
+ * next created session composes from.
+ */
+class InProcessController implements TuiController, CommandHost {
   readonly options: CliOptions
   private readonly store: Store<TuiState>
+  private readonly hooks: ControllerHooks
+  private handle?: AgentHandle
+  private readonly currentId: { current: string }
+  private defaultProvider: string
+  private defaultModel: string
 
   constructor(
     private readonly ctx: Context,
-    private readonly agent: import('./official.js').Agent,
     options: CliOptions,
     store: Store<TuiState>,
+    initialId: string,
+    hooks: ControllerHooks,
+    defaultProvider: string,
+    defaultModel: string,
   ) {
     this.options = options
     this.store = store
+    this.hooks = hooks
+    this.currentId = { current: initialId }
+    this.defaultProvider = defaultProvider
+    this.defaultModel = defaultModel
   }
+
+  // ── TuiController ─────────────────────────────────────────────────────────
 
   getState(): Store<TuiState> {
     return this.store
   }
 
+  /** CommandHost model vocabulary. */
+  get modelOptions(): ModelOption[] {
+    return this.options.modelOptions
+  }
+
   gitBranch(): string {
-    return ''
+    try {
+      const result = execFileSync('git', ['-C', this.options.cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      return result.trim()
+    } catch {
+      return ''
+    }
   }
 
   sessions(): ReturnType<import('./sessions.js').SessionRegistry['list']> {
+    // Phase 1: no in-process session cursor/browser; `/resume <id>` works by id.
     return []
   }
 
+  /** Submit one input line: slash command or prompt. */
   async submit(input: string): Promise<boolean> {
-    const text = input.trim()
-    if (text === '') return false
-    // Phase 1: forward the raw line as a user follow-up. Slash-command routing
-    // (model/preset/clear) is DSH-owned; wire it to the commands registry next.
-    const message = createUserMessage({ content: textBlock(text), source: { kind: 'user' } })
-    this.agent.followup(message)
+    const parsed = parseInput(input)
+    if (parsed.kind === 'prompt') {
+      this.submitPrompt(parsed.text)
+      return true
+    }
+    await runCommand(this, parsed.name, parsed.args)
     return true
   }
 
-  resumeSession(id: string): void {
-    void id // Resume is owned by the agent/session domain; no-op in phase 1.
+  /** Resume an existing session id through the official agent factory. */
+  async resumeSession(id: string): Promise<void> {
+    try {
+      await this.attach({ resumeSessionId: id as SessionId })
+      this.apply({ type: 'notice', message: `resumed ${shortId(id)}` })
+    } catch (error) {
+      this.apply({ type: 'error', message: errMsg(error) })
+    }
   }
 
+  /** Switch the model default used to compose new sessions. */
   async switchModel(option: ModelOption): Promise<void> {
-    void option // Model switch is DSH-owned (fork/new session); no-op in phase 1.
+    if (option.id === this.store.getState().model) {
+      this.apply({ type: 'notice', message: `already on ${option.id}` })
+      return
+    }
+    // Apply to new sessions: update the compose default + the status line.
+    this.defaultProvider = option.provider
+    this.defaultModel = option.id
+    this.apply({ type: 'context', provider: option.provider, model: option.id })
+    this.apply({ type: 'notice', message: `model → ${option.id} (new sessions; /new to start one)` })
+  }
+
+  // ── CommandHost ───────────────────────────────────────────────────────────
+
+  currentState(): TuiState {
+    return this.store.getState()
+  }
+
+  apply(event: TuiEvent): void {
+    this.store.setState(state => reduce(state, event))
+  }
+
+  clear(): void {
+    this.store.setState(state => ({ ...state, items: [] }))
+  }
+
+  /** Start a fresh session with the current model default. */
+  async newSession(): Promise<void> {
+    const id = `session-${randomPart()}` as SessionId
+    try {
+      await this.attach({ sessionId: id })
+      this.apply({ type: 'notice', message: `new session ${shortId(String(id))}` })
+    } catch (error) {
+      this.apply({ type: 'error', message: errMsg(error) })
+    }
+  }
+
+  openModal(modal: ModalKind): void {
+    this.hooks.openModal?.(modal)
+  }
+
+  onExit(): void {
+    this.hooks.onExit?.()
+  }
+
+  currentSessionId(): string {
+    return this.currentId.current
+  }
+
+  // ── lifecycle ─────────────────────────────────────────────────────────────
+
+  /** Create/resume an agent and (re)point the store at its session. */
+  private async attach(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<void> {
+    const previous = this.handle
+    this.handle = undefined
+    if (previous) {
+      // Detach cleanly only after the new agent is ready — if the new attach
+      // throws, the stale handle stays bound until the caller re-creates.
+      void previous.dispose()
+    }
+    const handle = await this.createOrResume(options)
+    this.handle = handle
+    const sessionId = handle.agent.id
+    this.currentId.current = String(sessionId)
+    this.store.setState(() => initialState(String(sessionId)))
+    // Replay the durable log so a resumed session paints its history.
+    for (const event of handle.agent.session.events) {
+      this.onSessionEvent(handle.agent.session, event)
+    }
+  }
+
+  private async createOrResume(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<AgentHandle> {
+    const agentOptions = { provider: this.defaultProvider, model: this.defaultModel }
+    if ('resumeSessionId' in options) {
+      return this.ctx.agents.resume({ resumeSessionId: options.resumeSessionId })
+    }
+    return this.ctx.agents.create({
+      sessionId: options.sessionId,
+      meta: { cwd: this.options.cwd },
+      agentOptions,
+    })
+  }
+
+  /** Project an official session event into the store (filtered to the live session). */
+  private onSessionEvent(session: Session, event: SessionEvent): void {
+    if (session.id !== this.currentId.current) return
+    for (const tuiEvent of eventsFor(event as unknown as LocalSessionEvent)) {
+      this.store.setState(state => reduce(state, tuiEvent))
+    }
+  }
+
+  /** Register the durable feed; call once at boot. */
+  subscribe(): void {
+    this.ctx.on('session/event', (session, event) => this.onSessionEvent(session, event))
+  }
+
+  /** Submit a plain prompt via the agent. */
+  private submitPrompt(text: string): void {
+    const trimmed = text.trim()
+    if (trimmed === '') return
+    const message = createUserMessage({ content: textBlock(trimmed), source: { kind: 'user' } })
+    this.handle?.agent.followup(message)
   }
 }
 
@@ -104,12 +258,25 @@ function textBlock(text: string): ContentBlock[] {
   return [{ type: 'text', text }]
 }
 
-/** Compute the controller's options from the plugin config. */
+function shortId(id: string): string {
+  return id.length > 14 ? id.slice(0, 14) : id
+}
+
+function randomPart(): string {
+  return crypto.randomUUID().replaceAll('-', '').slice(0, 12)
+}
+
+function errMsg(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** Build the controller's CliOptions from plugin config + dsh settings. */
 function controllerOptions(config: Config): CliOptions {
+  const settings = loadDshSettings()
+  const provider = config.provider ?? settings?.defaultProvider ?? 'deepseek-official'
+  const model = config.model ?? settings?.defaultModel ?? 'deepseek-v4-flash'
+  const modelOptions = settings?.modelOptions ?? [{ provider, id: model, name: model }]
   const cwd = config.cwd ?? process.cwd()
-  const provider = config.provider ?? 'deepseek-official'
-  const model = config.model ?? 'deepseek-v4-flash'
-  const modelOptions: ModelOption[] = [{ provider, id: model, name: model }]
   return {
     task: undefined,
     replay: undefined,
@@ -120,56 +287,59 @@ function controllerOptions(config: Config): CliOptions {
     provider,
     model,
     modelOptions,
-    projectRoot: cwd,
+    projectRoot: process.cwd(),
   }
 }
 
 /**
  * Start the in-process TUI. Creates/resumes an agent, subscribes to session
- * events, and renders the App. Resolves when the TUI teardown completes.
+ * events, renders the App, and resolves when the TUI teardown completes.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const sessionId = (config.sessionId ?? `session-${Date.now().toString(36)}`) as SessionId
-  const store = new Store<TuiState>(initialState(String(sessionId)))
+  const options = controllerOptions(config)
+  const initialId = config.sessionId ?? `session-${Date.now().toString(36)}`
+  const store = new Store<TuiState>(initialState(initialId))
+  const modalRef: { current: ((modal: Modal) => void) | undefined } = { current: undefined }
 
-  const agentHandle = await ctx.agents.create({
-    sessionId,
-    ...(config.cwd !== undefined ? { meta: { cwd: config.cwd } } : {}),
-    ...(config.model !== undefined ? { agentOptions: { model: config.model } } : {}),
-  })
-  const agent = agentHandle.agent
+  let app: { unmount: () => void } | undefined
+  let exitResolve: () => void = () => {}
+  const exitPromise = new Promise<void>(resolveExit => { exitResolve = resolveExit })
 
-  // The durable session event feed is the source of truth. Project through the
-  // existing wire mapper (the official event is a superset of the local
-  // structural subset) into the reducer.
-  const onSessionEvent = (_session: Session, event: SessionEvent): void => {
-    for (const tuiEvent of eventsFor(event as unknown as LocalSessionEvent)) {
-      store.setState(state => reduce(state, tuiEvent))
-    }
-  }
-  ctx.on('session/event', onSessionEvent)
+  const controller = new InProcessController(
+    ctx,
+    options,
+    store,
+    initialId,
+    {
+      openModal: modal => modalRef.current?.(modal),
+      onExit: () => {
+        app?.unmount()
+        exitResolve()
+      },
+    },
+    options.provider,
+    options.model,
+  )
 
-  // Replay the existing log so a resumed session paints its history.
-  for (const event of agent.session.events) {
-    onSessionEvent(agent.session, event)
-  }
-
-  const controller = new InProcessController(ctx, agent, controllerOptions(config), store)
-
-  /** Root owns modal state, mirroring the standalone App wiring. */
+  /** Root owns modal state and mirrors the setter into the controller hook. */
   function Root(): JSX.Element {
-    const [modal, setModal] = React.useState<Modal>('none')
+    const [modal, setModal] = useState<Modal>('none')
+    modalRef.current = setModal
     return <App controller={controller} modal={modal} setModal={setModal} />
   }
 
-  let app: { unmount: () => void } | undefined
-  return new Promise<void>(resolve => {
-    app = render(<Root />)
-    void agent.whenIdle().finally(() => {
-      void agentHandle.dispose().finally(() => {
-        app?.unmount()
-        resolve()
-      })
-    })
-  })
+  controller.subscribe()
+  app = render(<Root />)
+
+  try {
+    if (config.sessionId !== undefined) {
+      await controller.resumeSession(config.sessionId)
+    } else {
+      await controller.newSession()
+    }
+  } catch (error) {
+    // The store already carries the disconnected/error state; keep the UI alive.
+    void error
+  }
+  return exitPromise
 }
