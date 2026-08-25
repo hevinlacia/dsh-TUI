@@ -93,6 +93,16 @@ workspace context + goals on agent-spine (see `runtime/cordis.yml`). The TUI
 still drives it over JSON-RPC and reads settings.yaml for model/provider. The
 remaining big step is the in-process Cordis plugin mount (steps 1-2-4).
 
+Plugin-package foundation (in progress): `package.json` now declares the
+`@deepseek-ai/*` framework packages as **peer + dev** (prerelease-inclusive
+range `^0.1.0-rc.6 || ^0.1.1-rc.1`), adds `dsh.bundle.patch` → `cordis.patch.yml`
+and an `./cordis.patch.yml` export, and ships `.npmrc` with
+`legacy-peer-deps=true` so pnpm does not hard-fail on peer ranges that
+prerelease versions cannot satisfy (`dsh-system-prompt@>=0.1.1`). This makes
+the repo structurally an installable plugin package. The remaining piece is the
+in-process `src/plugin.tsx` (name/inject/Config/apply) + a dsh-base-compatible
+`cordis.patch.yml`; both need a running harness profile to verify.
+
 ## Commands
 
 - Install deps: `pnpm install`
@@ -112,9 +122,11 @@ remaining big step is the in-process Cordis plugin mount (steps 1-2-4).
 - **Official path**: prefer the official `@deepseek-ai/*` packages and the
   official profile/preset/host-plane model over bespoke replacements; where a
   bespoke piece exists, plan to move it behind the official equivalent.
-  The runtime packages are devDependencies at one `0.1.1-rc.2` line (a
-  standalone client bundles them); only if the client later ships as a plugin
-  package should they become peer + dev dependencies.
+  The runtime packages are declared as **peer + dev** dependencies at one
+  `0.1.1-rc.2` line (`legacy-peer-deps=true` in `.npmrc` keeps pnpm from hard-
+  failing on unsatisfiable peers). The profile / host plane provides the peers;`
+  dev deps let this repo typecheck/build. Do not add a `@deepseek-ai/*` package
+  to `dependencies` — put it in peer + dev.
 - **Config source** (`src/config.ts`): dsh's `$DSH_HOME/settings.yaml`
   (`llm-pi-ai.providers` + `agent-default-model`) drives the model/provider
   options; env (`DSH_TUI_MODEL` / `DSH_TUI_PROVIDER` / `DSH_TUI_MODELS`) wins
