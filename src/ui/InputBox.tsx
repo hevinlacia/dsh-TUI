@@ -34,6 +34,7 @@ export function InputBox(props: {
 }): JSX.Element {
   const { controller, modalOpen, currentModel, onToggleThinking } = props
   const [value, setValue] = useState('')
+  const [cursor, setCursor] = useState(0)
   const [completion, setCompletion] = useState<CompletionResult | undefined>(undefined)
   const [selected, setSelected] = useState(0)
   const [menuDismissed, setMenuDismissed] = useState(false)
@@ -55,15 +56,21 @@ export function InputBox(props: {
     setSelected(0)
   }, [typedCommand])
 
-  const applyText = (next: string): void => {
+  /** Set text and move the caret (defaults to the end). */
+  const setText = (next: string, cursorPos: number = next.length): void => {
     setValue(next)
+    setCursor(cursorPos)
+  }
+
+  const applyText = (next: string): void => {
+    setText(next)
     setCompletion(undefined)
     setMenuDismissed(false)
   }
 
   /** Fill the highlighted command into the box and close the menu. */
   const acceptCommand = (name: string): void => {
-    setValue(`/${name}`)
+    setText(`/${name}`)
     setMenuDismissed(true)
     setSelected(0)
   }
@@ -142,7 +149,7 @@ export function InputBox(props: {
         const entries = submenuEntries(spec.submenu, controller.options)
         if (entries.length > 0) {
           // Open the second-level menu instead of filling/running the command.
-          setValue(`/${name}`)
+          setText(`/${name}`)
           setSubmenu(entries)
           setSubmenuBase(`/${name}`)
           setSelected(0)
@@ -176,34 +183,64 @@ export function InputBox(props: {
     if (key.tab) {
       const result = complete(value, cwdRef.current)
       if (result.candidates.length > 0) {
-        setValue(result.completed)
+        setText(result.completed)
         setCompletion(result)
       }
       return
     }
     if (key.upArrow) {
-      navigateHistory(-1, historyRef.current, setValue, applyText, historyIndexRef)
+      navigateHistory(-1, historyRef.current, setText, applyText, historyIndexRef)
       return
     }
     if (key.downArrow) {
-      navigateHistory(1, historyRef.current, setValue, applyText, historyIndexRef)
+      navigateHistory(1, historyRef.current, setText, applyText, historyIndexRef)
       return
     }
     if (key.escape) {
       applyText('')
       return
     }
-    if (key.backspace) {
-      applyText(value.slice(0, -1))
+    if (key.leftArrow) {
+      setCursor(position => Math.max(0, position - 1))
       return
     }
-    if (key.delete) return // no forward-delete in a bare value buffer
+    if (key.rightArrow) {
+      setCursor(position => Math.min(value.length, position + 1))
+      return
+    }
+    if (key.home) {
+      setText(value, 0)
+      return
+    }
+    if (key.end) {
+      setText(value, value.length)
+      return
+    }
+    if (key.backspace) {
+      if (cursor > 0) {
+        setText(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1)
+        setCompletion(undefined)
+      }
+      return
+    }
+    if (key.delete) {
+      // Forward-delete at the caret (no-op at the end).
+      if (cursor < value.length) {
+        setText(value.slice(0, cursor) + value.slice(cursor + 1), cursor)
+        setCompletion(undefined)
+      }
+      return
+    }
     if (key.ctrl && input === 'u') {
       applyText('')
       return
     }
     if (key.ctrl) return
-    if (input !== '') applyText(value + input)
+    if (input !== '') {
+      setText(value.slice(0, cursor) + input + value.slice(cursor), cursor + input.length)
+      setCompletion(undefined)
+      setMenuDismissed(false)
+    }
   })
 
   const inCommand = value.trim().startsWith('/')
@@ -215,8 +252,9 @@ export function InputBox(props: {
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
       <Box paddingX={1}>
         <Text color={inCommand ? palette.commandName : 'cyan'}>{inCommand ? '/ ' : '> '}</Text>
-        <Text>{value}</Text>
+        <Text>{value.slice(0, cursor)}</Text>
         <Text color="gray">▏</Text>
+        <Text>{value.slice(cursor)}</Text>
       </Box>
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
     </Box>

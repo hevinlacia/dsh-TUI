@@ -34,13 +34,15 @@ const BY_NAME: ReadonlyMap<string, CommandSpec> = new Map(COMMANDS.map(command =
 
 /** Parse the input line: a slash command or a user prompt. */
 export function parseInput(input: string): { kind: 'command'; name: string; args: string } | { kind: 'prompt'; text: string } {
-  const trimmed = input.trim()
-  if (trimmed.startsWith('/')) {
-    const [rawName, ...rest] = trimmed.slice(1).split(/\s+/u)
-    const name = (rawName ?? '').toLowerCase()
-    if (name !== '') return { kind: 'command', name, args: rest.join(' ').trim() }
-  }
-  return { kind: 'prompt', text: trimmed }
+  // A command must start at column 0 (no leading whitespace) AND its first
+  // token must be an EXACT command name. Otherwise a path like `/home/...`
+  // (or a prompt about one) is submitted as text, not misparsed as a command.
+  if (!input.startsWith('/')) return { kind: 'prompt', text: input.trim() }
+  const [rawName, ...rest] = input.slice(1).split(/\s+/u)
+  const name = (rawName ?? '').toLowerCase()
+  if (name === '') return { kind: 'prompt', text: input.trim() }
+  if (lookupCommand(name) === undefined) return { kind: 'prompt', text: input.trim() }
+  return { kind: 'command', name, args: rest.join(' ').trim() }
 }
 
 /** Look up a command spec (also resolves strict prefixes, e.g. `/new`). */
