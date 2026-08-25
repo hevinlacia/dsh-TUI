@@ -125,9 +125,10 @@ preset: standard
 switches directly. Full access also turns the approval policy off (`never`), the
 others stay `ask`. The footer badge (`ro`/`ws`/`full`) shows the live level.
 `/preset` picks the agent preset (`standard`/`code`/`minimal`/`cordis`) for new
-sessions — the choice is passed to the agent factory (`meta.agentPreset`);
-mounting the agent-presets roster (a deliberate profile change, like the web
-profile) makes it change the tool world.
+sessions — the choice is passed to the agent factory (`meta.agentPreset`) and
+mounted through the agent-presets roster (`ctx.agentPresets.mount`), so it
+changes the tool world (the host tool rows are disabled and the preset owns the
+tools, like the web profile).
 
 Known `/` commands not handled by the TUI (e.g. `/plan`, `/goal`) are routed to
 the harness command registry, so they execute without a model round-trip. A

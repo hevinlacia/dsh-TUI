@@ -25,6 +25,7 @@ import {
   Schema,
   setSandboxMode,
   type Agent,
+  type AgentPresetsService,
   type ApprovalOutcome,
   type ApprovalRequest,
   type AskUserQuestionAnswer,
@@ -51,7 +52,7 @@ import type { TuiController, InteractionDecision } from './ui/controller.js'
 
 export const name = 'dsh-tui'
 /** Agent registry, user-question, approval + harness command services the TUI drives. */
-export const inject = ['agents', 'userQuestions', 'approval', 'commands']
+export const inject = ['agents', 'userQuestions', 'approval', 'commands', 'agentPresets']
 
 /** dsh-tui plugin configuration. */
 export interface Config {
@@ -358,13 +359,22 @@ class InProcessController implements TuiController, CommandHost {
 
   private async createOrResume(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<AgentHandle> {
     const agentOptions = { provider: this.defaultProvider, model: this.defaultModel }
+    // Compose the agent's scoped world from the selected preset (the agent
+    // factory's `setup` is the supported call site): ensure the preset's
+    // standing mount, then parent this agent's scope key to it so the mount's
+    // tools/prompt/sections cover it. Without a roster nothing happens.
+    const setup = async (ctx: Context): Promise<void> => {
+      const preset = this.currentPreset()
+      await this.ctx.agentPresets!.mount(ctx, preset)
+    }
     if ('resumeSessionId' in options) {
-      return this.ctx.agents.resume({ resumeSessionId: options.resumeSessionId })
+      return this.ctx.agents.resume({ resumeSessionId: options.resumeSessionId, setup })
     }
     return this.ctx.agents.create({
       sessionId: options.sessionId,
-      meta: { cwd: this.options.cwd, agentPreset: this.defaultPreset },
+      meta: { cwd: this.options.cwd, agentPreset: this.currentPreset() },
       agentOptions,
+      setup,
     })
   }
 
