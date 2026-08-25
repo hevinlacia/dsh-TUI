@@ -53,26 +53,32 @@ rendering, input, session metadata, and model selection. See
 
 ## Install And Run
 
+The canonical client is the **in-process Cordis plugin**: `dsh-tui` boots the
+official dsh profile host plane and loads this package as a plugin inside the
+harness (one command — it auto-creates the profile on first run).
+
 ```sh
 cd ~/Developer/tools/dsh-tui
 pnpm install
 pnpm build
-node ./bin/dsh-tui.js
+
+dsh-tui                     # boot the dsh-tui profile (in-process plugin)
+dsh-tui --profile NAME      # boot a specific profile
+dsh-tui --dry-run           # print the boot command, don't run
+dsh-tui "summarize this repo"  # one-shot task
 ```
+
+Under the hood `dsh-tui` runs `dsh --profile <name>`; the first run installs
+THIS package into the profile (`dsh plugin --profile <name> add <this pkg>`).
+The legacy **JSON-RPC subprocess client** is still available at
+`dsh-tui-standalone` (spawns `dsh-jsonrpc-agent`, no approval/permission/sandbox
+switching).
 
 Development and checks:
 
 ```sh
 pnpm dev      # build + run
 pnpm check    # build + keyless smoke (no model, no runtime)
-```
-
-Run a single task and exit:
-
-```sh
-dsh-tui "summarize this repository"
-dsh-tui --dry-run "hello"
-dsh-tui --replay fixtures/sample-conversation.jsonl
 ```
 
 ## Configuration

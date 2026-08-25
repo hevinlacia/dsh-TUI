@@ -78,11 +78,16 @@ console.log('dsh-tui smoke')
   check('error capture surfaces failure', /error/i.test(text), 'expected an error marker')
 }
 
-// 5. dry-run prints the spawn command
+// 5. launcher dry-run (in-process) + legacy standalone dry-run
 {
-  const result = spawnSync(process.execPath, [bin, '--dry-run', 'hello'], { encoding: 'utf8' })
-  check('dry-run exits 0', result.status === 0, `status ${result.status}`)
-  check('dry-run prints spawn', /^spawn /m.test(result.stdout), result.stdout)
+  const launcher = spawnSync(process.execPath, [bin, '--dry-run', 'hello'], { encoding: 'utf8' })
+  check('launcher dry-run exits 0', launcher.status === 0, `status ${launcher.status}`)
+  check('launcher dry-run prints spawn dsh', /^spawn dsh --profile /m.test(launcher.stdout), launcher.stdout)
+
+  const standalone = join(root, 'bin/dsh-tui-standalone.js')
+  const legacy = spawnSync(process.execPath, [standalone, '--dry-run', 'hello'], { encoding: 'utf8' })
+  check('standalone dry-run exits 0', legacy.status === 0, `status ${legacy.status}`)
+  check('standalone dry-run prints spawn', /^spawn /m.test(legacy.stdout), legacy.stdout)
 }
 
 process.exitCode = failures === 0 ? 0 : 1

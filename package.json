@@ -6,7 +6,8 @@
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "dsh-tui": "./bin/dsh-tui.js"
+    "dsh-tui": "./bin/dsh-tui.js",
+    "dsh-tui-standalone": "./bin/dsh-tui-standalone.js"
   },
   "main": "lib/plugin.js",
   "types": "lib/plugin.d.ts",
