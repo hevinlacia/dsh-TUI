@@ -15,7 +15,7 @@ export function NoticeLine(props: { state: TuiState }): JSX.Element {
     <Box minHeight={1} paddingX={1}>
       {state.error !== ''
         ? <Text color="red" wrap="truncate">{state.error}</Text>
-        : <Text dimColor wrap="truncate">{state.notice}</Text>}
+        : <Text dimColor wrap="wrap">{state.notice}</Text>}
     </Box>
   )
 }

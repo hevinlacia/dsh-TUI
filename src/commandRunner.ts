@@ -53,7 +53,7 @@ export async function runCommand(host: CommandHost, name: string, args: string):
   const state = host.currentState()
   switch (spec.name) {
     case 'help':
-      host.apply({ type: 'notice', message: COMMANDS.map(command => `/${command.name}`).join(' ') })
+      host.apply({ type: 'notice', message: COMMANDS.map(command => `${command.usage} — ${command.description}`).join('\n') })
       break
     case 'clear':
       host.clear()

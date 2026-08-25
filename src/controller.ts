@@ -215,7 +215,7 @@ export class SessionController {
     const state = this.store.getState()
     switch (spec.name) {
       case 'help':
-        this.apply({ type: 'notice', message: COMMANDS.map(c => `/${c.name}`).join(' ') })
+        this.apply({ type: 'notice', message: COMMANDS.map(command => `${command.usage} — ${command.description}`).join('\n') })
         break
       case 'clear':
         this.clear()
