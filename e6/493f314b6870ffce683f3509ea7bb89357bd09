@@ -1,0 +1,27 @@
+src/ui/InteractionView.tsx
+  4a39bee216722927 113-115
+src/plugin.tsx
+  4a39bee216722927 374,381-386
+src/events/types.ts
+  4a39bee216722927 94-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e6493f314b6870ffce683f3509ea7bb89357bd09",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "medium-model-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 21,
+      "total_deletions": 8,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
