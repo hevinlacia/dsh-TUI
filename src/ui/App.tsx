@@ -64,10 +64,10 @@ export function App(props: {
       )}
       {modal === 'model' && (
         <ModelSwitch
-          models={controller.options.models}
+          options={controller.options.modelOptions}
           current={state.model}
-          onSelect={async model => {
-            await controller.switchModel(model)
+          onSelect={async option => {
+            await controller.switchModel(option)
             setModal('none')
           }}
           onClose={() => setModal('none')}

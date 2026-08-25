@@ -6,7 +6,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import type { CliOptions } from './config.js'
+import type { CliOptions, ModelOption } from './config.js'
 import { COMMANDS, lookupCommand, parseInput } from './commands.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
 import { tuiEventsFromNotification, type TuiEvent } from './events/types.js'
@@ -145,15 +145,16 @@ export class SessionController {
     this.apply({ type: 'notice', message: `resumed ${shortId(id)} — previous messages stay in the runtime log` })
   }
 
-  /** Switch the model for subsequently created sessions. */
-  async switchModel(model: string): Promise<void> {
+  /** Switch the model (and its provider) for subsequently created sessions. */
+  async switchModel(option: ModelOption): Promise<void> {
+    const model = option.id
     if (model === this.store.getState().model) {
       this.apply({ type: 'notice', message: `already on ${model}` })
       return
     }
     try {
-      await this.client.switchModel(model, this.options.provider, this.options.cwd)
-      this.apply({ type: 'context', provider: this.options.provider, model })
+      await this.client.switchModel(model, option.provider, this.options.cwd)
+      this.apply({ type: 'context', provider: option.provider, model })
       this.apply({ type: 'notice', message: `model → ${model} (applies to new sessions; /new to start one)` })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -231,12 +232,12 @@ export class SessionController {
           this.hooks.openModal?.('model')
           break
         }
-        const model = this.options.models.find(candidate => candidate === args)
-        if (model === undefined) {
-          this.apply({ type: 'error', message: `unknown model ${args} — ${this.options.models.join(' | ')}` })
+        const option = this.options.modelOptions.find(candidate => candidate.id === args)
+        if (option === undefined) {
+          this.apply({ type: 'error', message: `unknown model ${args} — ${this.options.modelOptions.map(opt => opt.id).join(' | ')}` })
           break
         }
-        await this.switchModel(model)
+        await this.switchModel(option)
         break
       }
       case 'exit':
