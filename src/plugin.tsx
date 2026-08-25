@@ -420,6 +420,7 @@ class InProcessController implements TuiController, CommandHost {
           header: item.header,
           options: (item.options ?? []).map(option => ({ label: option.label, description: option.description })),
           multiSelect: item.multiSelect ?? false,
+          intent: item.intent,
         })),
       },
     })

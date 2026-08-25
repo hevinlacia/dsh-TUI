@@ -127,12 +127,16 @@ function renderQuestion(
   const item = interaction.items[0]
   if (item === undefined) return <Text color={palette.error}>空问题</Text>
   const options = item.options ?? []
-  const header = item.header ?? ''
+  const isPlanReview = item.intent?.kind === 'plan-review'
+  const header = item.header ?? (isPlanReview ? '计划审阅' : '')
   return (
     <>
       <Text color={palette.accent}>{header !== '' ? header : '提问'}</Text>
       <Text>{item.question}</Text>
       {item.detail !== undefined && item.detail !== '' ? <Text color={palette.meta}>{item.detail}</Text> : null}
+      {isPlanReview && item.intent !== undefined && (
+        <Text color={palette.commandSelected}>批准请选「{item.intent.approve}」，其他选项拒绝 · esc 取消</Text>
+      )}
       {options.length > 0
         ? (
           <>

@@ -82,6 +82,7 @@ export interface QuestionItem {
   header?: string
   options: QuestionOption[]
   multiSelect?: boolean
+  intent?: { kind: 'plan-review'; approve: string }
 }
 
 /** A pending permission decision the agent is blocked on. */
