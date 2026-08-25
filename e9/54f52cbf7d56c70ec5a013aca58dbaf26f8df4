@@ -1,0 +1,23 @@
+src/plugin.tsx
+  4a39bee216722927 18,43,137-139,228-233,236-237,239,249,251-266,271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e954f52cbf7d56c70ec5a013aca58dbaf26f8df4",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "medium-model-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 19,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    }
+  }
+}
