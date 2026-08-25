@@ -116,6 +116,7 @@
     "@deepseek-ai/dsh-user-questions": "0.1.1-rc.2",
     "@types/node": "^24.3.0",
     "@types/react": "^19.2.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@deepseek-ai/dsh-sdk-jsonrpc-demo": "0.1.1-rc.2"
   }
 }
