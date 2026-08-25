@@ -37,11 +37,6 @@ export interface CommandHost {
   currentSessionId(): string
 }
 
-/** Shorten a session id for display in notices (like the standalone). */
-function shortId(id: string): string {
-  return id.length > 14 ? id.slice(0, 14) : id
-}
-
 /**
  * Run one slash command against a host. Unknown commands, help/clear/status/
  * context/new stay purely in the store; resume/sessions open the sessions
@@ -62,10 +57,11 @@ export async function runCommand(host: CommandHost, name: string, args: string):
       host.clear()
       break
     case 'status':
+      // Show the FULL session id so `/resume <id>` gets a copy-paste-able id.
       host.apply({
         type: 'notice',
         message:
-          `session ${shortId(host.currentSessionId())} · ${state.connection} · ${state.phase}`
+          `session ${host.currentSessionId()} · ${state.connection} · ${state.phase}`
           + ` · ${state.provider}/${state.model || '?'} · turn ${state.turn} step ${state.step}`,
       })
       break

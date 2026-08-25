@@ -15,6 +15,8 @@
  */
 
 import { execFileSync } from 'node:child_process'
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import React, { useState, type JSX } from 'react'
 import { render } from 'ink'
 import {
@@ -27,7 +29,7 @@ import {
   type SessionEvent,
   type SessionId,
 } from './official.js'
-import { loadDshSettings, type CliOptions, type ModelOption } from './config.js'
+import { dshHome, loadDshSettings, type CliOptions, type ModelOption } from './config.js'
 import { parseInput } from './commands.js'
 import { runCommand, type CommandHost, type ModalKind } from './commandRunner.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
@@ -141,8 +143,9 @@ class InProcessController implements TuiController, CommandHost {
   /** Resume an existing session id through the official agent factory. */
   async resumeSession(id: string): Promise<void> {
     try {
-      await this.attach({ resumeSessionId: id as SessionId })
-      this.apply({ type: 'notice', message: `resumed ${shortId(id)}` })
+      const resolved = this.resolveSessionId(id)
+      await this.attach({ resumeSessionId: resolved as SessionId })
+      this.apply({ type: 'notice', message: `resumed ${resolved}` })
     } catch (error) {
       this.apply({ type: 'error', message: errMsg(error) })
     }
@@ -180,7 +183,7 @@ class InProcessController implements TuiController, CommandHost {
     const id = `session-${randomPart()}` as SessionId
     try {
       await this.attach({ sessionId: id })
-      this.apply({ type: 'notice', message: `new session ${shortId(String(id))}` })
+      this.apply({ type: 'notice', message: `new session ${String(id)}` })
     } catch (error) {
       this.apply({ type: 'error', message: errMsg(error) })
     }
@@ -199,6 +202,52 @@ class InProcessController implements TuiController, CommandHost {
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────────────
+
+  /** Tear down the live agent (best-effort) on exit. */
+  async disposeAgent(): Promise<void> {
+    if (this.handle === undefined) return
+    const handle = this.handle
+    this.handle = undefined
+    await handle.dispose()
+  }
+
+  /** Expand a `/resume` argument to a real session id (exact → prefix scan). */
+  private resolveSessionId(input: string): string {
+    const trimmed = input.trim()
+    if (trimmed === '') return trimmed
+    return this.scanPersistedSessionId(trimmed) ?? trimmed
+  }
+
+  /** Best-effort prefix match against the durable session-store layout. */
+  private scanPersistedSessionId(prefix: string): string | undefined {
+    const root = join(dshHome(), 'sessions')
+    const matches: string[] = []
+    const walk = (dir: string, depth: number): void => {
+      if (depth > 3) return
+      let entries: { name: string; isDirectory(): boolean }[] = []
+      try {
+        entries = readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
+          // Session ids are leaf dirs (`session-6532a0a0664f`); skip the
+          // `--<cwd-slug>--` grouping dirs (they start with `--`) and recurse.
+          if (entry.name.startsWith(prefix) && !entry.name.startsWith('--')) {
+            matches.push(entry.name)
+          } else {
+            walk(full, depth + 1)
+          }
+        }
+      }
+    }
+    walk(root, 0)
+    if (matches.length === 1) return matches[0]
+    if (matches.length > 1) throw new Error(`ambiguous session "${prefix}" — ${matches.join(', ')}`)
+    return undefined
+  }
 
   /** Create/resume an agent and (re)point the store at its session. */
   private async attach(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<void> {
@@ -256,10 +305,6 @@ function textBlock(text: string): ContentBlock[] {
   return [{ type: 'text', text }]
 }
 
-function shortId(id: string): string {
-  return id.length > 14 ? id.slice(0, 14) : id
-}
-
 function randomPart(): string {
   return crypto.randomUUID().replaceAll('-', '').slice(0, 12)
 }
@@ -311,8 +356,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     {
       openModal: modal => modalRef.current?.(modal),
       onExit: () => {
-        app?.unmount()
-        exitResolve()
+        // The host profile keeps running after `apply` resolves, so a TUI
+        // front door must terminate the process itself (like the community
+        // client): dispose the agent, unmount the Ink tree, then exit.
+        void controller.disposeAgent().finally(() => {
+          app?.unmount()
+          exitResolve()
+          process.exit(0)
+        })
       },
     },
     options.provider,

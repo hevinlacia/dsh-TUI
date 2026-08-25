@@ -129,7 +129,7 @@ export class SessionController {
     fresh.provider = this.store.getState().provider
     fresh.model = this.store.getState().model
     this.store.setState(() => fresh)
-    this.apply({ type: 'notice', message: `new session ${shortId(this.sessionId)}` })
+    this.apply({ type: 'notice', message: `new session ${this.sessionId}` })
   }
 
   /** Switch the active session id (for `/resume`); view resets to the fresh id. */
@@ -142,7 +142,7 @@ export class SessionController {
     const meta = this.registry.list().find(entry => entry.id === id)
     fresh.title = meta?.title ?? ''
     this.store.setState(() => fresh)
-    this.apply({ type: 'notice', message: `resumed ${shortId(id)} — previous messages stay in the runtime log` })
+    this.apply({ type: 'notice', message: `resumed ${id} — previous messages stay in the runtime log` })
   }
 
   /** Switch the model (and its provider) for subsequently created sessions. */
@@ -204,7 +204,7 @@ export class SessionController {
         this.apply({
           type: 'notice',
           message:
-            `session ${shortId(this.sessionId)} · ${state.connection} · ${state.phase}`
+            `session ${this.sessionId} · ${state.connection} · ${state.phase}`
             + ` · ${state.provider}/${state.model || '?'} · turn ${state.turn} step ${state.step}`,
         })
         break
@@ -249,8 +249,4 @@ export class SessionController {
 
 function randomPart(): string {
   return crypto.randomUUID().replaceAll('-', '').slice(0, 12)
-}
-
-function shortId(id: string): string {
-  return id.length > 14 ? id.slice(0, 14) : id
 }
