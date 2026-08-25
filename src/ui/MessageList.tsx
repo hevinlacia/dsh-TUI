@@ -1,32 +1,82 @@
 /**
  * R2 — chat area: the ordered surface of user/assistant/tool items with an
- * auto-following tail window. Ink has no scrolling primitives; phase 1 caps
- * the rendered window to the last N items and keeps the tail pinned.
+ * auto-following tail window and keyboard scrollback. Ink has no scrolling
+ * primitives, so the rendered window slides over the full item history:
+ * PageUp/PageDown move the window (the tail stays pinned when at offset 0);
+ * submitting a new message or clearing snaps back to the tail.
  * @module dsh-tui/ui/MessageList
  */
 
-import type { JSX } from 'react'
-import { Box, Text } from 'ink'
+import { useEffect, useRef, useState, type JSX } from 'react'
+import { Box, Text, useInput, useStdout } from 'ink'
 import type { TuiState } from '../events/reducer.js'
 import { MessageItem } from './MessageItem.js'
 import { ToolCard } from './ToolCard.js'
 
+/** Render-window size; offset can slide the window over the whole history. */
 const TAIL_WINDOW = 512
 
 /** Renders the chat items, most recent last. */
-export function MessageList(props: { state: TuiState; thinkingOpen: boolean }): JSX.Element {
-  const { state, thinkingOpen } = props
-  const items = state.items.slice(-TAIL_WINDOW)
-  if (items.length === 0) {
+export function MessageList(props: {
+  state: TuiState
+  thinkingOpen: boolean
+  /** Scroll keys are only active while no modal/interaction owns the keyboard. */
+  scrollActive: boolean
+}): JSX.Element {
+  const { state, thinkingOpen, scrollActive } = props
+  const [offset, setOffset] = useState(0)
+  const prevTotalRef = useRef(0)
+  const prevUserRef = useRef(0)
+  const { stdout } = useStdout()
+  // A "page" ≈ the visible chat height, bounded to something sane.
+  const page = Math.max(5, (stdout?.rows ?? 24) - 8)
+
+  const total = state.items.length
+  const maxOffset = Math.max(0, total - TAIL_WINDOW)
+  const clamped = Math.min(offset, maxOffset)
+
+  // Snap back to the tail on a new user message (a submit) or a clear (total
+  // shrank). Reviewing (scrolled up) while the agent streams is left alone.
+  useEffect(() => {
+    let userCount = 0
+    for (const item of state.items) if (item.kind === 'user') userCount += 1
+    if (total < prevTotalRef.current || userCount > prevUserRef.current) {
+      setOffset(0)
+    }
+    prevTotalRef.current = total
+    prevUserRef.current = userCount
+  }, [state.items, total])
+
+  useInput((_input, key) => {
+    if (key.pageUp) {
+      setOffset(value => Math.min(maxOffset, value + page))
+      return
+    }
+    if (key.pageDown) {
+      setOffset(value => Math.max(0, value - page))
+    }
+  }, { isActive: scrollActive })
+
+  if (total === 0) {
     return (
       <Box flexGrow={1} paddingX={1}>
         <Text dimColor>type a message or /help — the agent replies here…</Text>
       </Box>
     )
   }
+
+  const from = Math.max(0, total - TAIL_WINDOW - clamped)
+  const to = Math.max(0, total - clamped)
+  const visible = state.items.slice(from, to)
+
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} gap={1}>
-      {items.map(item => item.kind === 'tool'
+      {clamped > 0 && (
+        <Box>
+          <Text dimColor>{`↑ 上翻 ${clamped} 条 · PageUp/PageDown 浏览 · PageDown 回到底部`}</Text>
+        </Box>
+      )}
+      {visible.map(item => item.kind === 'tool'
         ? <ToolCard key={item.id} item={item} />
         : <MessageItem key={item.id} item={item} thinkingOpen={thinkingOpen} />)}
     </Box>

@@ -46,7 +46,7 @@ export function App(props: {
               <InfoPanel model={state.model} effort={state.effort} cwd={cwd} gitBranch={gitBranch} />
             </Box>
           )
-          : <MessageList state={state} thinkingOpen={thinkingOpen} />}
+          : <MessageList state={state} thinkingOpen={thinkingOpen} scrollActive={modal === 'none' && pending === undefined} />}
       </Box>
       <NoticeLine state={state} />
       {pending !== undefined && <InteractionView interaction={pending} controller={controller} />}
