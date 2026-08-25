@@ -1,0 +1,33 @@
+src/ui/App.tsx
+  4a39bee216722927 17,39-44
+src/ui/InputBox.tsx
+  4a39bee216722927 2-4,8-9,12-14,18,28-29,33-44,49-56,59-60,71-95,143-147,151,168
+src/ui/CommandMenu.tsx
+  4a39bee216722927 1-35
+src/ui/Splash.tsx
+  4a39bee216722927 2-4,28-29,47
+src/ui/InfoPanel.tsx
+  4a39bee216722927 1-32
+src/ui/theme.ts
+  4a39bee216722927 35-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "6b283ce11c9655cc2affd1f564753bb66457d95e",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "medium-model-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 194,
+      "total_deletions": 50,
+      "accepted_lines": 149,
+      "overriden_lines": 0
+    }
+  }
+}
