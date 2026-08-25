@@ -33,7 +33,7 @@ export function MessageItem(props: { item: ChatItem; thinkingOpen: boolean }): J
   return (
     <Box flexDirection="column" paddingLeft={1}>
       {item.thinking !== '' && (
-        <ThinkingBlock thinking={item.thinking} open={thinkingOpen || pending} startedAt={item.thinkingStartedAt} />
+        <ThinkingBlock thinking={item.thinking} open={thinkingOpen || pending} startedAt={item.thinkingStartedAt} endedAt={item.thinkingEndedAt} />
       )}
       <Box>
         {bullet}

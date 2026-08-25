@@ -45,6 +45,8 @@ export type ChatItem =
     interrupted?: boolean
     /** Wall-clock ms when the first thinking delta for this item arrived. */
     thinkingStartedAt?: number
+    /** Wall-clock ms when the thinking finished (freezes the live timer). */
+    thinkingEndedAt?: number
     time: number
   }
   | {
