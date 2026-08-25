@@ -537,6 +537,14 @@ class InProcessController implements TuiController, CommandHost {
     this.apply({ type: 'interaction-close' })
   }
 
+  /** Abort the running agent turn (Esc / Ctrl+C while busy). */
+  interrupt(): void {
+    const agent = this.handle?.agent
+    if (agent === undefined || agent.status !== 'running') return
+    agent.cancel({ kind: 'user' })
+    this.apply({ type: 'notice', message: '已中断当前回合' })
+  }
+
   /** Submit a plain prompt via the agent. */
   private submitPrompt(text: string): void {
     const trimmed = text.trim()

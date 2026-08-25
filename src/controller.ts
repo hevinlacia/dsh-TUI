@@ -190,6 +190,11 @@ export class SessionController {
     return []
   }
 
+  /** The standalone runtime has no in-process agent to abort; no-op. */
+  interrupt(): void {
+    this.apply({ type: 'notice', message: 'standalone 无进程内 agent，无法中断（用 /exit 退出）' })
+  }
+
   /** Clear the rendered chat view. */
   clear(): void {
     this.store.setState(state => ({ ...state, items: [] }))

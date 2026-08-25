@@ -8,7 +8,7 @@
 import Schema from '@deepseek-ai/schemastery'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentCancelCause } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
@@ -51,6 +51,7 @@ export type {
   MessageId,
   ApprovalOutcome,
   ApprovalRequest,
+  AgentCancelCause,
   AskUserQuestionAnswer,
   AskUserQuestionRequest,
   UserQuestionProvider,

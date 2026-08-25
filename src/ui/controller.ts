@@ -46,4 +46,6 @@ export interface TuiController {
   resolveInteraction(seq: number, decision: InteractionDecision): boolean
   /** Cancel the pending model-facing interaction (treated as user-declined). */
   cancelInteraction(seq: number): void
+  /** Abort the running agent turn (Esc / Ctrl+C while busy). */
+  interrupt(): void
 }

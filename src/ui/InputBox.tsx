@@ -147,10 +147,12 @@ export function InputBox(props: {
   modalOpen: boolean
   /** Current session model — used to mark "(current)" in the model submenu. */
   currentModel: string
+  /** Whether the agent is mid-turn (Esc/Ctrl+C interrupt instead of clear/exit). */
+  running: boolean
   /** Called (only when idle typing) to toggle thinking blocks — A2. */
   onToggleThinking: () => void
 }): JSX.Element {
-  const { controller, modalOpen, currentModel, onToggleThinking } = props
+  const { controller, modalOpen, currentModel, running, onToggleThinking } = props
   const [value, setValue] = useState('')
   const [cursor, setCursor] = useState(0)
   const [completion, setCompletion] = useState<CompletionResult | undefined>(undefined)
@@ -208,7 +210,11 @@ export function InputBox(props: {
   useInput((input, key) => {
     if (modalOpen) return // modals own the keyboard while open
     if (key.ctrl && input === 'c') {
-      void controller.submit('/exit')
+      if (running) {
+        controller.interrupt()
+      } else {
+        void controller.submit('/exit')
+      }
       return
     }
     if (input === 't' && !key.ctrl && !key.shift && value === '') {
@@ -336,7 +342,11 @@ export function InputBox(props: {
       return
     }
     if (key.escape) {
-      applyText('')
+      if (running) {
+        controller.interrupt()
+      } else {
+        applyText('')
+      }
       return
     }
     if (key.leftArrow) {

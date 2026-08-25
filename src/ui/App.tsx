@@ -54,6 +54,7 @@ export function App(props: {
         controller={controller}
         modalOpen={modal !== 'none' || pending !== undefined}
         currentModel={state.model}
+        running={state.phase === 'working' || state.phase === 'thinking' || state.phase === 'tool-running'}
         onToggleThinking={() => setThinkingOpen(open => !open)}
       />
       <StatusBar state={state} cwd={cwd} gitBranch={gitBranch} />
