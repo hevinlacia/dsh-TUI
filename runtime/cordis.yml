@@ -3,11 +3,28 @@
 # This tree is the runtime dsh-tui spawns. stdout is reserved for JSON-RPC
 # protocol frames — do not add a console logger or terminal UI here.
 #
-# Plugin names resolve from this project's node_modules (devDependencies
-# pinned to the harness 0.1.1-rc.2 line). The credential rows below mirror the
-# official dsh-base bundle so an existing $DSH_HOME/settings.yaml route (e.g.
-# a local llm-provider-router) is picked up unchanged; llm-deepseek remains
-# the official-API fallback (DEEPSEEK_API_KEY).
+# Composition shape follows DeepSeek Harness's official services:
+# agent-spine-demo is configured with Skills on, workspace (AGENTS.md) context
+# at the standard 64KB cap, and the goal domain. Approval, question, plan-mode,
+# command-goal, subagent (spawn + fork), fs-observation-policy and session-query
+# are official DSH services mounted the same way a standard client composes them.
+# (Design reference: the community dsh-TUI bare cordis.yml; our own tree, no code
+# copied. Approval/ask-user answerers are not yet registered by the TUI, so the
+# approval waterfall fail-closes to 'unavailable' — see docs/architecture.md.)
+
+# User-question service: hosts `ctx.userQuestions`, the seam behind the
+# model-facing ask_user_question tool. Must live at root so the agent loop's
+# tool execution can reach it.
+- id: user-questions
+  name: '@deepseek-ai/dsh-user-questions'
+
+# Approval service: the harness's sandbox escalation seam. Without a TUI
+# answerer the waterfall fail-closes to 'unavailable' (safe), so this row is
+# opt-in for the model-facing approval seam; policy mirrors a standard client.
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+  config:
+    policy: !!js "process.platform === 'win32' ? 'never' : ((process.env.DSH_PERMISSION_MODE ?? 'workspace-write') === 'danger-full-access' ? 'never' : 'ask')"
 
 # Out-of-process SDK surface: initialize / session/prompt / shutdown requests,
 # session.event / session.status / subagent.* notifications.
@@ -46,49 +63,7 @@
     cwd: !!js process.env.DSH_CWD ?? process.cwd()
     timeoutMs: 60000
 
-- id: agent-spine
-  name: '@deepseek-ai/dsh-agent-spine-demo'
-  config:
-    persona: !!js process.env.DSH_SYSTEM_PROMPT ?? 'You are a coding agent.'
-    workspaceContext: false
-    skills:
-      enabled: false
-    toolBash:
-      enableRunInBackground: false
-    toolJobs: false
-
-# Durable session log (authority for resume). dsh-tui keeps its own UI metadata
-# registry; it never reads this log directly.
-- id: sessions
-  name: '@deepseek-ai/dsh-session-persistence-jsonl'
-  config:
-    root: !!js process.env.DSH_SESSION_ROOT ?? './.sessions'
-    compression: !!js "process.env.DSH_SNAPSHOT === undefined ? 'zstd' : 'none'"
-
-- id: session-checkpoints
-  name: '@deepseek-ai/dsh-session-checkpoint-policy'
-
-- id: subagent
-  name: '@deepseek-ai/dsh-subagent'
-
-- id: subagent-spawn-in-process
-  name: '@deepseek-ai/dsh-subagent-spawn-in-process'
-  config:
-    providerName: spawn
-
-- id: tool-subagent
-  name: '@deepseek-ai/dsh-tool-subagent'
-  config:
-    provider: spawn
-    toolName: subagent
-    enableRunInBackground: false
-
-- id: tool-todo
-  name: '@deepseek-ai/dsh-tool-todo'
-  config:
-    allowParallelInProgress: true
-
-# Code editing: file search + string-replace editor.
+# Filesystem service + read/write/edit policy gate, then the model-facing tools.
 - id: fs-local
   name: '@deepseek-ai/dsh-fs-local'
   config:
@@ -105,6 +80,89 @@
   config:
     maxOutputChars: 16000
 
+# todo_write tool: replaces the logged whole list (DSH's todo tool).
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# Subagents: the registry service, then spawn/fork backends and the delegation
+# tools. The core `dsh-subagent` service MUST mount before any provider.
+- id: subagent
+  name: '@deepseek-ai/dsh-subagent'
+
+- id: subagent-spawn
+  name: '@deepseek-ai/dsh-subagent-spawn-in-process'
+  config:
+    providerName: spawn
+
+- id: subagent-fork
+  name: '@deepseek-ai/dsh-subagent-fork-in-process'
+  config:
+    providerName: fork
+
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    backgroundMode: continuable
+    maxDepth: 1
+
+- id: tool-subagent-fork
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: fork
+    toolName: subagent_fork
+    backgroundMode: continuable
+    maxDepth: 1
+
+# The agent spine. Skills on (local SKILL.md discovery + catalog/load tools),
+# workspace (AGENTS.md) context at the standard 64KB cap, and the goal domain.
+- id: agent-spine
+  name: '@deepseek-ai/dsh-agent-spine-demo'
+  config:
+    persona: !!js process.env.DSH_SYSTEM_PROMPT ?? 'You are a coding agent.'
+    workspaceContext:
+      maxBytes: 65536
+    skills:
+      enabled: true
+    goals: {}
+    toolBash:
+      enableRunInBackground: false
+
+# Human-command registry: plan-mode's /plan and command-goal's /goal register
+# here; the TUI merges them into its slash menu and dispatches through the
+# registry. Must mount before the commands below.
+- id: commands
+  name: '@deepseek-ai/dsh-commands'
+
+- id: plan-mode
+  name: '@deepseek-ai/dsh-plan-mode'
+  config:
+    section: |
+      You are in plan mode. Explore and design before presenting the
+      complete plan through exit_plan_mode.
+
+- id: command-goal
+  name: '@deepseek-ai/dsh-command-goal'
+
+# Durable session log (authority for resume). dsh-tui keeps its own UI metadata
+# registry; it never reads this log directly.
+- id: sessions
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js process.env.DSH_SESSION_ROOT ?? './.sessions'
+    compression: !!js "process.env.DSH_SNAPSHOT === undefined ? 'zstd' : 'none'"
+
+# Read-only session lineage — the subagent service's /agents listing reads it.
+- id: session-query
+  name: '@deepseek-ai/dsh-session-query'
+
+- id: session-checkpoints
+  name: '@deepseek-ai/dsh-session-checkpoint-policy'
+
+# Token accounting + manual session compaction.
 - id: token-meter
   name: '@deepseek-ai/dsh-token-meter'
 

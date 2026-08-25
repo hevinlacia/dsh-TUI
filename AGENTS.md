@@ -65,7 +65,11 @@ pin the `@deepseek-ai/*` framework packages as both peer and dev dependencies.
 - UI: Ink components under `src/ui/`; wiring hub `src/controller.ts`
 - Model/provider config: `src/config.ts` reads `$DSH_HOME/settings.yaml`
   (`llm-pi-ai.providers` + `agent-default-model`) — see `loadDshSettings`
-- Runtime composition: `runtime/cordis.yml`
+- Runtime composition: `runtime/cordis.yml` (official DSH services + agent-spine
+  with Skills on, workspace AGENTS.md context, goal domain; approval/ask-user
+  answerers not yet registered → fail-closed)
+- Adapter boundary: `src/adapter.ts` — the only place official `@deepseek-ai/*`
+  imports may appear; `src/ui/*` never imports them directly
 
 ## Transition status
 
@@ -82,8 +86,12 @@ curated tool set. Work is tracked to:
    subprocess in favor of in-process Cordis service consumption.
 4. Keep the TUI rendering/input layer, adapted to consume official events.
 
-Do not mistake current `runtime/cordis.yml` for the long-term shape; the
-composition is moving to the official profile + preset model.
+Current state: the runtime composition now mounts official DSH services
+(user-questions, approval, subagent spawn+fork, commands, plan-mode,
+command-goal, session-query, fs-observation-policy) and enables Skills +
+workspace context + goals on agent-spine (see `runtime/cordis.yml`). The TUI
+still drives it over JSON-RPC and reads settings.yaml for model/provider. The
+remaining big step is the in-process Cordis plugin mount (steps 1-2-4).
 
 ## Commands
 
@@ -104,6 +112,9 @@ composition is moving to the official profile + preset model.
 - **Official path**: prefer the official `@deepseek-ai/*` packages and the
   official profile/preset/host-plane model over bespoke replacements; where a
   bespoke piece exists, plan to move it behind the official equivalent.
+  The runtime packages are devDependencies at one `0.1.1-rc.2` line (a
+  standalone client bundles them); only if the client later ships as a plugin
+  package should they become peer + dev dependencies.
 - **Config source** (`src/config.ts`): dsh's `$DSH_HOME/settings.yaml`
   (`llm-pi-ai.providers` + `agent-default-model`) drives the model/provider
   options; env (`DSH_TUI_MODEL` / `DSH_TUI_PROVIDER` / `DSH_TUI_MODELS`) wins

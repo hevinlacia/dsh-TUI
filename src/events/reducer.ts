@@ -162,6 +162,11 @@ export function reduce(state: TuiState, event: TuiEvent): TuiState {
       return { ...state, error: event.message, phase: 'error' }
     case 'notice':
       return { ...state, notice: event.message }
+    default:
+      // Unknown official event types (skills/goal/plan/approval etc.) are
+      // filtered by the notification mapper; defensive no-op for any that
+      // reach the reducer directly so the store never collapses.
+      return state
   }
 }
 
