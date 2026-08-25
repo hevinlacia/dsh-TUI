@@ -8,10 +8,10 @@ is a client of the official Harness ecosystem: it uses the official
 host-plane architecture, and official DSH services.
 
 It is **not** a fork of, and does not copy the code of, the community
-`dsh-TUI` (`@deepseek-harness-tui/dsh-tui`, repo `~/Developer/github/dsh-TUI`).
-The community project serves only as a **design reference** for how to mount a
-TUI as a zero-core-change plugin onto the official harness and how to keep the
-UI thin. All implementation here is our own.
+`dsh-TUI` (`@deepseek-harness-tui/dsh-tui`) — which is no longer used or
+cloned here. All implementation is our own, aligned to the official Harness
+plugin model (mount a zero-core-change TUI plugin onto the official harness
+and keep the UI thin).
 
 ## Architecture
 
@@ -139,9 +139,9 @@ compile-tested only). Standalone mode is the verified daily path.
 - **Keep the UI thin**: the JSON-RPC wire / Cordis boundary is the only edge the
   UI crosses into the agent core. Never modify Agent Core to fit the UI; the
   runtime owns agent/model/tool/session/persistence behavior.
-- **Design reference, not code**: you may read `~/Developer/github/dsh-TUI` and
-  `~/Developer/github/deepseek-harness` for design; do not copy their source,
-  renderer, presets, bundled skills, branding, or plugin ecosystem files.
+- **Design reference, not code**: you may read `~/Developer/github/deepseek-harness`
+  for design; do not copy its source, renderer, presets, bundled skills,
+  branding, or plugin ecosystem files.
 - **Official path**: prefer the official `@deepseek-ai/*` packages and the
   official profile/preset/host-plane model over bespoke replacements; where a
   bespoke piece exists, plan to move it behind the official equivalent.
