@@ -15,9 +15,10 @@ import type { ModelOption } from './config.js'
 import { COMMANDS, lookupCommand } from './commands.js'
 import type { TuiState } from './events/reducer.js'
 import type { TuiEvent } from './events/types.js'
+import { PERMISSION_LEVELS, resolvePermission, type PermissionMode } from './permission.js'
 
 /** The second-level modal kinds the controller can ask the UI to open. */
-export type ModalKind = 'sessions' | 'model'
+export type ModalKind = 'sessions' | 'model' | 'permission'
 
 /**
  * The primitives a controller supplies so `runCommand` can act on the store
@@ -31,6 +32,7 @@ export interface CommandHost {
   newSession(): void
   resumeSession(id: string): void
   switchModel(option: ModelOption): Promise<void>
+  setPermissionMode(mode: PermissionMode): Promise<void>
   openModal(modal: ModalKind): void
   onExit(): void
   modelOptions: ModelOption[]
@@ -98,6 +100,19 @@ export async function runCommand(host: CommandHost, name: string, args: string):
         break
       }
       await host.switchModel(option)
+      break
+    }
+    case 'permission': {
+      if (args === '') {
+        host.openModal('permission')
+        break
+      }
+      const permission = resolvePermission(args)
+      if (permission === undefined) {
+        host.apply({ type: 'error', message: `unknown permission ${args} — ${PERMISSION_LEVELS.map(level => level.label).join(' | ')}` })
+        break
+      }
+      await host.setPermissionMode(permission)
       break
     }
     case 'exit':

@@ -21,7 +21,9 @@ import React, { useState, type JSX } from 'react'
 import { render } from 'ink'
 import {
   createUserMessage,
+  effectiveSandboxMode,
   Schema,
+  setSandboxMode,
   type Agent,
   type ApprovalOutcome,
   type ApprovalRequest,
@@ -29,11 +31,13 @@ import {
   type AskUserQuestionRequest,
   type ContentBlock,
   type Context,
+  type SandboxMode,
   type Session,
   type SessionEvent,
   type SessionId,
 } from './official.js'
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
+import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, type PermissionMode } from './permission.js'
 import { parseInput } from './commands.js'
 import { runCommand, type CommandHost, type ModalKind } from './commandRunner.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
@@ -45,8 +49,8 @@ import { App, type Modal } from './ui/App.js'
 import type { TuiController, InteractionDecision } from './ui/controller.js'
 
 export const name = 'dsh-tui'
-/** The agent registry + user-question service the TUI drives. */
-export const inject = ['agents', 'userQuestions']
+/** Agent registry, user-question service, and approval service the TUI drives. */
+export const inject = ['agents', 'userQuestions', 'approval']
 
 /** dsh-tui plugin configuration. */
 export interface Config {
@@ -174,6 +178,26 @@ class InProcessController implements TuiController, CommandHost {
     this.apply({ type: 'notice', message: `model → ${option.id} (new sessions; /new to start one)` })
   }
 
+  /** The session's current effective permission mode (fold of sandbox/mode events). */
+  currentPermission(): PermissionMode {
+    const agent = this.handle?.agent
+    if (agent === undefined) return DEFAULT_PERMISSION
+    return effectiveSandboxMode(agent.session.events) ?? DEFAULT_PERMISSION
+  }
+
+  /** Switch the permission level: sandbox mode + the matching approval policy. */
+  async setPermissionMode(mode: PermissionMode): Promise<void> {
+    const agent = this.handle?.agent
+    if (agent === undefined) return
+    setSandboxMode(agent.session, mode as SandboxMode)
+    this.ctx.approval.setPolicy(agent, approvalPolicyFor(mode))
+    this.apply({ type: 'permission', mode })
+    this.apply({
+      type: 'notice',
+      message: `permission → ${permissionLabel(mode)} (${approvalPolicyFor(mode) === 'never' ? '无确认' : 'ask 确认'})`,
+    })
+  }
+
   // ── CommandHost ───────────────────────────────────────────────────────────
 
   currentState(): TuiState {
@@ -290,6 +314,10 @@ class InProcessController implements TuiController, CommandHost {
     for (const event of handle.agent.session.events) {
       this.onSessionEvent(handle.agent.session, event)
     }
+    // The permission is its own fold (deployment default when no override);
+    // `eventsFor` maps `sandbox/mode` too, but set it explicitly so a session
+    // with no override still shows the deployment default.
+    this.apply({ type: 'permission', mode: this.currentPermission() })
   }
 
   private async createOrResume(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<AgentHandle> {

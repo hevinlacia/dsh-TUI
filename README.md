@@ -111,7 +111,13 @@ preset: standard
 ## Commands inside the TUI
 
 `/help` `/status` `/context` `/new` `/resume [id]` `/sessions` `/model [name]`
-`/clear` `/exit` — plus `↑/↓` history, `Tab` completion, `t` thinking toggle.
+`/permission [mode]` `/clear` `/exit` — plus `↑/↓` history, `Tab` completion,
+`t` thinking toggle.
+
+`/permission` (no arg) opens a picker for the three DSH sandbox levels
+(`read-only` / `workspace-write` / `danger-full-access`); `/permission <mode>`
+switches directly. Full access also turns the approval policy off (`never`), the
+others stay `ask`. The footer badge (`ro`/`ws`/`full`) shows the live level.
 
 ## Deliberately out of scope (phase 1)
 

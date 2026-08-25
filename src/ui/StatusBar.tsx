@@ -10,6 +10,7 @@ import { basename } from 'node:path'
 import type { TuiState } from '../events/reducer.js'
 import { elapsedSeconds, useNow } from './useNow.js'
 import { palette, labels } from './theme.js'
+import type { PermissionMode } from '../permission.js'
 
 const PHASE_LABEL: Record<TuiState['phase'], string> = {
   idle: 'idle',
@@ -32,11 +33,19 @@ function compactTokens(n: number): string {
   return `${n}`
 }
 
+/** Compact permission tag + color for the footer. */
+const PERM_TAG: Record<PermissionMode, { tag: string; title: string; color: string }> = {
+  'read-only': { tag: 'ro', title: 'read-only', color: palette.toolError },
+  'workspace-write': { tag: 'ws', title: 'workspace-write', color: palette.ok },
+  'danger-full-access': { tag: 'full', title: 'danger-full-access', color: palette.toolName },
+}
+
 /** The whole footer as one line. */
 export function StatusBar(props: { state: TuiState; cwd: string; gitBranch: string }): JSX.Element {
   const { state, cwd, gitBranch } = props
   const now = useNow(1000)
   const project = basename(cwd)
+  const perm = PERM_TAG[state.permission] ?? { tag: state.permission, title: state.permission, color: palette.statusText }
   const elapsed = state.turnStartedAt > 0 ? elapsedSeconds(state.turnStartedAt, now) : 0
   const contextUsed = state.tokens.input
   const contextPct = state.contextWindow > 0 ? `${(contextUsed / state.contextWindow * 100).toFixed(1)}%` : '–'
@@ -56,6 +65,7 @@ export function StatusBar(props: { state: TuiState; cwd: string; gitBranch: stri
         <Text color={palette.accent}>{` ${model}${effort} · ${tokensOut}`}</Text>
         <Text dimColor>{` · ${phase}`}</Text>
         <Text dimColor>{` · ${tools}`}</Text>
+        <Text color={perm.color}>{` · ${perm.tag}`}</Text>
         <Text dimColor>{elapsed > 0 ? ` · ${elapsed}s` : ''}</Text>
         <Text color={palette.accent} dimColor>{` · ctx ${compactTokens(contextUsed)}/${state.contextWindow > 0 ? compactTokens(state.contextWindow) : '–'} ${contextPct}${contextRemaining}`}</Text>
         <Text dimColor>

@@ -12,13 +12,14 @@ import { MessageList } from './MessageList.js'
 import { InputBox } from './InputBox.js'
 import { SessionBrowser } from './SessionBrowser.js'
 import { ModelSwitch } from './ModelSwitch.js'
+import { PermissionSwitch } from './PermissionSwitch.js'
 import { InteractionView } from './InteractionView.js'
 import { NoticeLine } from './NoticeLine.js'
 import { Splash } from './Splash.js'
 import { InfoPanel } from './InfoPanel.js'
 
 /** Modal state shared between controller commands and the UI. */
-export type Modal = 'none' | 'sessions' | 'model'
+export type Modal = 'none' | 'sessions' | 'model' | 'permission'
 
 /** Root component. `modal` is App-local React state; the controller opens it via hooks. */
 export function App(props: {
@@ -71,6 +72,16 @@ export function App(props: {
           current={state.model}
           onSelect={async option => {
             await controller.switchModel(option)
+            setModal('none')
+          }}
+          onClose={() => setModal('none')}
+        />
+      )}
+      {modal === 'permission' && (
+        <PermissionSwitch
+          current={state.permission}
+          onSelect={async mode => {
+            await controller.setPermissionMode(mode)
             setModal('none')
           }}
           onClose={() => setModal('none')}

@@ -11,13 +11,14 @@ import { COMMANDS, lookupCommand, parseInput } from './commands.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
 import { tuiEventsFromNotification, type TuiEvent } from './events/types.js'
 import type { HarnessClient } from './harness/client.js'
+import { PERMISSION_LEVELS, permissionLabel, resolvePermission, type PermissionMode } from './permission.js'
 import { SessionRegistry } from './sessions.js'
 import { Store } from './state/store.js'
 
 /** Callbacks the TUI supplies to the controller for UI-only concerns. */
 export interface ControllerHooks {
-  /** Open a modal (sessions browser / model switch). */
-  openModal?: (modal: 'sessions' | 'model') => void
+  /** Open a modal (sessions browser / model switch / permission switch). */
+  openModal?: (modal: 'sessions' | 'model' | 'permission') => void
   /** Called when the user quits. */
   onExit?: () => void
 }
@@ -162,6 +163,17 @@ export class SessionController {
     }
   }
 
+  /** The JSON-RPC runtime's session is the source; the store mirrors the event fold. */
+  currentPermission(): PermissionMode {
+    return this.store.getState().permission
+  }
+
+  /** The standalone runtime owns the sandbox; there is no JSON-RPC switch, so this only updates the UI. */
+  async setPermissionMode(mode: PermissionMode): Promise<void> {
+    this.apply({ type: 'permission', mode })
+    this.apply({ type: 'notice', message: `permission → ${permissionLabel(mode)} (standalone 无法真正切换，需进程内模式)` })
+  }
+
   /** Clear the rendered chat view. */
   clear(): void {
     this.store.setState(state => ({ ...state, items: [] }))
@@ -246,6 +258,19 @@ export class SessionController {
           break
         }
         await this.switchModel(option)
+        break
+      }
+      case 'permission': {
+        if (args === '') {
+          this.hooks.openModal?.('permission')
+          break
+        }
+        const permission = resolvePermission(args)
+        if (permission === undefined) {
+          this.apply({ type: 'error', message: `unknown permission ${args} — ${PERMISSION_LEVELS.map(level => level.label).join(' | ')}` })
+          break
+        }
+        await this.setPermissionMode(permission)
         break
       }
       case 'exit':

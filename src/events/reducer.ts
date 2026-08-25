@@ -8,6 +8,7 @@
 import type { ChatItem, TodoItem, PendingInteraction } from './types.js'
 import type { TokenUsage } from '../harness/types.js'
 import type { AgentPhase, ConnectionState, TuiEvent } from './types.js'
+import { DEFAULT_PERMISSION, type PermissionMode } from '../permission.js'
 
 /** Full TUI state. */
 export interface TuiState {
@@ -36,6 +37,8 @@ export interface TuiState {
   turnStartedAt: number
   /** The model-facing interaction waiting on a human decision, if any. */
   pending: PendingInteraction | undefined
+  /** The session's effective sandbox/permission mode. */
+  permission: PermissionMode
 }
 
 /** Fresh state for a session; keeps the previous chat items when resuming. */
@@ -59,6 +62,7 @@ export function initialState(sessionId: string): TuiState {
     tokens: { input: 0, output: 0, reasoning: 0 },
     turnStartedAt: 0,
     pending: undefined,
+    permission: DEFAULT_PERMISSION,
   }
 }
 
@@ -165,6 +169,8 @@ export function reduce(state: TuiState, event: TuiEvent): TuiState {
       return { ...state, error: event.message, phase: 'error' }
     case 'notice':
       return { ...state, notice: event.message }
+    case 'permission':
+      return { ...state, permission: event.mode }
     case 'interaction-open':
       return { ...state, pending: event.pending }
     case 'interaction-close':

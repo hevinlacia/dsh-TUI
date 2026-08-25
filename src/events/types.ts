@@ -9,6 +9,7 @@
  */
 
 import type { HarnessNotification, SessionEvent, TokenUsage } from '../harness/types.js'
+import type { PermissionMode } from '../permission.js'
 
 /** Deliberately small superset of the harness `AgentStatus`; UI-specific labels. */
 export type AgentPhase =
@@ -138,6 +139,7 @@ export type TuiEvent =
   }
   | { type: 'error'; message: string }
   | { type: 'notice'; message: string }
+  | { type: 'permission'; mode: PermissionMode }
   | { type: 'interaction-open'; pending: PendingInteraction }
   | { type: 'interaction-close' }
 
@@ -282,6 +284,13 @@ export function eventsFor(event: SessionEvent): TuiEvent[] {
         model: str(data.model ?? ''),
         ...(typeof effort === 'string' ? { effort } : {}),
       }]
+    }
+    case 'sandbox/mode': {
+      const mode = str(data.mode)
+      if (mode === 'read-only' || mode === 'workspace-write' || mode === 'danger-full-access') {
+        return [{ type: 'permission', mode }]
+      }
+      return []
     }
     default:
       return []

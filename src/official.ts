@@ -17,8 +17,10 @@ import type {
   AskUserQuestionRequest,
   UserQuestionProvider,
 } from '@deepseek-ai/dsh-user-questions'
+import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { effectiveSandboxMode, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 
-export { Schema, createUserMessage }
+export { Schema, createUserMessage, setSandboxMode, effectiveSandboxMode }
 export type {
   Context,
   Agent,
@@ -32,4 +34,5 @@ export type {
   AskUserQuestionAnswer,
   AskUserQuestionRequest,
   UserQuestionProvider,
+  SandboxMode,
 }
