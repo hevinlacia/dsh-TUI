@@ -93,15 +93,32 @@ workspace context + goals on agent-spine (see `runtime/cordis.yml`). The TUI
 still drives it over JSON-RPC and reads settings.yaml for model/provider. The
 remaining big step is the in-process Cordis plugin mount (steps 1-2-4).
 
-Plugin-package foundation (in progress): `package.json` now declares the
+Plugin-package foundation: `package.json` now declares the
 `@deepseek-ai/*` framework packages as **peer + dev** (prerelease-inclusive
 range `^0.1.0-rc.6 || ^0.1.1-rc.1`), adds `dsh.bundle.patch` → `cordis.patch.yml`
 and an `./cordis.patch.yml` export, and ships `.npmrc` with
 `legacy-peer-deps=true` so pnpm does not hard-fail on peer ranges that
 prerelease versions cannot satisfy (`dsh-system-prompt@>=0.1.1`). This makes
-the repo structurally an installable plugin package. The remaining piece is the
-in-process `src/plugin.tsx` (name/inject/Config/apply) + a dsh-base-compatible
-`cordis.patch.yml`; both need a running harness profile to verify.
+the repo structurally an installable plugin package.
+
+The in-process plugin (steps 1-2-4) is now skeleton-to-full-controller:
+`src/plugin.tsx` (name/inject/Config/apply) creates/resumes an agent via
+`ctx.agents.create`/`resume`, subscribes to `session/event`, and projects the
+feed through the shared `eventsFor` + reducer. Its `InProcessController`
+implements the full slash vocabulary via `src/commandRunner.ts` (reused from
+the standalone set, without touching the working CLI path): `/model` switches
+the compose default, `/new` re-creates a fresh session, `/resume <id>` resumes
+a persisted session, `/clear`/`/status`/`/context`/`/exit` behave as in the
+standalone. `cordis.patch.yml` overlays persona + shared session root and
+inserts the `dsh-tui` row; MOUNT verified via `dsh --profile <test>
+--dump-config` (composes over dsh-base, no `entry not found`).
+
+**Remaining / needs a running harness to verify (live, not compile):** the
+in-process `apply` actually booting — a real `dsh --profile <name>` with this
+plugin creating an agent, rendering, and receiving session events; and the
+model-switch/resume DSH-domain behavior against a live agent (the
+`currentSessionId`-filtered subscription and re-create/resume plumbing are
+compile-tested only). Standalone mode is the verified daily path.
 
 ## Commands
 
