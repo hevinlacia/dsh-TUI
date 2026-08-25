@@ -32,7 +32,11 @@ export function MessageList(props: {
   const page = Math.max(5, (stdout?.rows ?? 24) - 8)
 
   const total = state.items.length
-  const maxOffset = Math.max(0, total - TAIL_WINDOW)
+  // Slide the window over the WHOLE history: the 512-item render cap must not
+  // gate scrolling, or sessions shorter than that could never scroll in-app
+  // (their only fallback is terminal-native scrollback, which a full-screen
+  // TUI redraw yanks back to the tail).
+  const maxOffset = Math.max(0, total - 1)
   const clamped = Math.min(offset, maxOffset)
 
   // Snap back to the tail on a new user message (a submit) or a clear (total
@@ -60,7 +64,7 @@ export function MessageList(props: {
   if (total === 0) {
     return (
       <Box flexGrow={1} paddingX={1}>
-        <Text dimColor>type a message or /help — the agent replies here…</Text>
+        <Text dimColor>type a message or /help — the agent replies here… (PageUp/PageDown 滚动回看)</Text>
       </Box>
     )
   }
