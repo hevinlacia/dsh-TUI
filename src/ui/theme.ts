@@ -32,6 +32,10 @@ export const palette = {
   ok: 'greenBright',
   error: 'redBright',
   spinner: 'cyanBright',
+  inputRule: '#2a3750',
+  commandName: 'yellowBright',
+  commandItem: 'gray',
+  commandSelected: 'blueBright',
 } as const
 
 export type PaletteColor = (typeof palette)[keyof typeof palette]
