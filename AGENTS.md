@@ -74,16 +74,22 @@ pin the `@deepseek-ai/*` framework packages as both peer and dev dependencies.
 ## Transition status
 
 The code is **mid-transition** toward the official-client (in-process Cordis
-plugin) model. It still runs the TUI as a separate JSON-RPC client over a
-self-owned `runtime/cordis.yml`, and still uses `dsh-agent-spine-demo` with a
-curated tool set. Work is tracked to:
+plugin) model. The **primary entry is now the in-process plugin**: `dsh-tui`
+boots the official dsh profile host plane with this package loaded as a plugin
+(see `bin/dsh-tui.js`), auto-creating the profile on first run. The older
+JSON-RPC subprocess client is kept at `dsh-tui-standalone` (legacy; spawns
+`dsh-jsonrpc-agent`, no approval/permission/sandbox switching). Work is tracked
+to:
 
 1. Move the runtime to consume the official profile + host plane (mount as a
-   profile bundle: `dsh plugin --profile <name> add <pkg>`).
+   profile bundle: `dsh plugin --profile <name> add <pkg>`) — DONE (the plugin
+   is the primary entry).
 2. Switch to the official agent-presets (`standard` / `minimal` / `code` /
-   `cordis`) instead of the hand-rolled `agent-spine-demo` tree.
+   `cordis`) instead of the hand-rolled `agent-spine-demo` tree — still open
+   (agents are composed via explicit agentOptions, not preset rosters).
 3. Introduce the `@deepseek-ai/*` adapter boundary and drop the raw JSON-RPC
-   subprocess in favor of in-process Cordis service consumption.
+   subprocess in favor of in-process Cordis service consumption — DONE at the
+   adapter boundary (`src/official.ts`), the JSON-RPC path is legacy-only.
 4. Keep the TUI rendering/input layer, adapted to consume official events.
 
 Current state: the runtime composition now mounts official DSH services
