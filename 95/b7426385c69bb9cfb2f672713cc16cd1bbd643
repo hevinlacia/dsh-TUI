@@ -1,0 +1,23 @@
+README.md
+  4a39bee216722927 120-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "95b7426385c69bb9cfb2f672713cc16cd1bbd643",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "medium-model-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 2,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
