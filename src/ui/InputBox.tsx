@@ -399,7 +399,7 @@ export function InputBox(props: {
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
       <Box paddingX={1}>
         <Text color={inCommand ? palette.commandName : 'cyan'}>{inCommand ? '/ ' : '> '}</Text>
-        <Text>{value.slice(0, cursor)}<Text inverse> </Text>{value.slice(cursor)}</Text>
+        <Text>{value.slice(0, cursor)}<Text inverse>{cursor < value.length && value[cursor] !== '\n' ? value[cursor] : ' '}</Text>{value.slice(cursor + 1)}</Text>
       </Box>
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
     </Box>
