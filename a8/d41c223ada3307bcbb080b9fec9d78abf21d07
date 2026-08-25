@@ -1,0 +1,25 @@
+src/ui/App.tsx
+  4a39bee216722927 49
+src/ui/MessageList.tsx
+  4a39bee216722927 3-6,10-11,16,20-60,67-71,74-79,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a8d41c223ada3307bcbb080b9fec9d78abf21d07",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "deepseek-v4-flash-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 61,
+      "total_deletions": 11,
+      "accepted_lines": 61,
+      "overriden_lines": 0
+    }
+  }
+}
