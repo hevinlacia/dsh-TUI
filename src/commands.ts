@@ -29,6 +29,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   { name: 'model', usage: '/model [name]', description: 'show or switch the model for new sessions', submenu: 'models' },
   { name: 'permission', usage: '/permission [mode]', description: 'show or switch the permission level' },
   { name: 'preset', usage: '/preset [name]', description: 'show or switch the agent preset' },
+  { name: 'commands', usage: '/commands', description: 'list dsh-tui and harness commands' },
   { name: 'exit', usage: '/exit', description: 'quit dsh-tui' },
 ]
 

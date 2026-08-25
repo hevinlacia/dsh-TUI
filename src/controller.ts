@@ -185,6 +185,11 @@ export class SessionController {
     this.apply({ type: 'notice', message: `preset → ${presetLabel(preset)} (standalone 无 agent-presets roster，仅记录)` })
   }
 
+  /** Standalone talks JSON-RPC, so no harness command registry is reachable. */
+  async listHarnessCommands(): Promise<Array<{ name: string; description: string }>> {
+    return []
+  }
+
   /** Clear the rendered chat view. */
   clear(): void {
     this.store.setState(state => ({ ...state, items: [] }))
@@ -228,6 +233,13 @@ export class SessionController {
       case 'help':
         this.apply({ type: 'notice', message: COMMANDS.map(command => `${command.usage} — ${command.description}`).join('\n') })
         break
+      case 'commands': {
+        const harness = await this.listHarnessCommands()
+        const tui = COMMANDS.map(command => `${command.usage} — ${command.description}`)
+        const header = harness.length > 0 ? '\n— harness commands —' : ''
+        this.apply({ type: 'notice', message: [...tui, ...(harness.length > 0 ? [header, ...harness.map(c => `/${c.name} — ${c.description}`)] : [])].join('\n') })
+        break
+      }
       case 'clear':
         this.clear()
         break

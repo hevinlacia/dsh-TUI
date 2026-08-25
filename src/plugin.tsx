@@ -221,6 +221,20 @@ class InProcessController implements TuiController, CommandHost {
     this.apply({ type: 'notice', message: `preset → ${presetLabel(preset)} (new sessions; /new to start one)` })
   }
 
+  /** Harness-registered commands (plan, goal, compact, …) for `/commands`. */
+  async listHarnessCommands(): Promise<Array<{ name: string; description: string }>> {
+    const agent = this.handle?.agent
+    if (agent === undefined) return []
+    try {
+      return this.ctx.commands.list(agent).map(descriptor => ({
+        name: descriptor.name,
+        description: descriptor.description,
+      }))
+    } catch {
+      return []
+    }
+  }
+
   /** Switch the permission level: sandbox mode + the matching approval policy. */
   async setPermissionMode(mode: PermissionMode): Promise<void> {
     const agent = this.handle?.agent

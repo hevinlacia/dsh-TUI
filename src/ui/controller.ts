@@ -40,6 +40,8 @@ export interface TuiController {
   currentPreset(): AgentPreset
   /** Switch the agent preset used to compose new sessions. */
   setAgentPreset(preset: AgentPreset): Promise<void>
+  /** Harness-registered commands discoverable for `/commands` (empty offline). */
+  listHarnessCommands(): Promise<Array<{ name: string; description: string }>>
   /** Resolve the pending model-facing interaction (approval/question). */
   resolveInteraction(seq: number, decision: InteractionDecision): boolean
   /** Cancel the pending model-facing interaction (treated as user-declined). */

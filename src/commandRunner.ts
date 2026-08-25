@@ -35,6 +35,7 @@ export interface CommandHost {
   switchModel(option: ModelOption): Promise<void>
   setPermissionMode(mode: PermissionMode): Promise<void>
   setAgentPreset(preset: AgentPreset): Promise<void>
+  listHarnessCommands(): Promise<Array<{ name: string; description: string }>>
   openModal(modal: ModalKind): void
   onExit(): void
   modelOptions: ModelOption[]
@@ -57,6 +58,14 @@ export async function runCommand(host: CommandHost, name: string, args: string):
     case 'help':
       host.apply({ type: 'notice', message: COMMANDS.map(command => `${command.usage} — ${command.description}`).join('\n') })
       break
+    case 'commands': {
+      const harness = await host.listHarnessCommands()
+      const tui = COMMANDS.map(command => `${command.usage} — ${command.description}`)
+      const harnessLines = harness.map(command => `/${command.name} — ${command.description}`)
+      const header = harnessLines.length > 0 ? '\n— harness commands —' : ''
+      host.apply({ type: 'notice', message: [...tui, ...(harnessLines.length > 0 ? [header, ...harnessLines] : [])].join('\n') })
+      break
+    }
     case 'clear':
       host.clear()
       break
