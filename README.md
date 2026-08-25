@@ -117,13 +117,17 @@ preset: standard
 ## Commands inside the TUI
 
 `/help` `/status` `/context` `/new` `/resume [id]` `/sessions` `/model [name]`
-`/permission [mode]` `/clear` `/exit` — plus `↑/↓` history, `Tab` completion,
-`t` thinking toggle.
+`/permission [mode]` `/preset [name]` `/clear` `/exit` — plus `↑/↓` history,
+`Tab` completion, `t` thinking toggle.
 
 `/permission` (no arg) opens a picker for the three DSH sandbox levels
 (`read-only` / `workspace-write` / `danger-full-access`); `/permission <mode>`
 switches directly. Full access also turns the approval policy off (`never`), the
 others stay `ask`. The footer badge (`ro`/`ws`/`full`) shows the live level.
+`/preset` picks the agent preset (`standard`/`code`/`minimal`/`cordis`) for new
+sessions — the choice is passed to the agent factory (`meta.agentPreset`);
+mounting the agent-presets roster (a deliberate profile change, like the web
+profile) makes it change the tool world.
 
 ## Deliberately out of scope (phase 1)
 

@@ -16,9 +16,10 @@ import { COMMANDS, lookupCommand } from './commands.js'
 import type { TuiState } from './events/reducer.js'
 import type { TuiEvent } from './events/types.js'
 import { PERMISSION_LEVELS, resolvePermission, type PermissionMode } from './permission.js'
+import { AGENT_PRESETS, isAgentPreset, type AgentPreset } from './presets.js'
 
 /** The second-level modal kinds the controller can ask the UI to open. */
-export type ModalKind = 'sessions' | 'model' | 'permission'
+export type ModalKind = 'sessions' | 'model' | 'permission' | 'preset'
 
 /**
  * The primitives a controller supplies so `runCommand` can act on the store
@@ -33,6 +34,7 @@ export interface CommandHost {
   resumeSession(id: string): void
   switchModel(option: ModelOption): Promise<void>
   setPermissionMode(mode: PermissionMode): Promise<void>
+  setAgentPreset(preset: AgentPreset): Promise<void>
   openModal(modal: ModalKind): void
   onExit(): void
   modelOptions: ModelOption[]
@@ -113,6 +115,18 @@ export async function runCommand(host: CommandHost, name: string, args: string):
         break
       }
       await host.setPermissionMode(permission)
+      break
+    }
+    case 'preset': {
+      if (args === '') {
+        host.openModal('preset')
+        break
+      }
+      if (!isAgentPreset(args)) {
+        host.apply({ type: 'error', message: `unknown preset ${args} — ${AGENT_PRESETS.join(' | ')}` })
+        break
+      }
+      await host.setAgentPreset(args)
       break
     }
     case 'exit':

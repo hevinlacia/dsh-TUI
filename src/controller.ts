@@ -12,13 +12,14 @@ import { reduce, initialState, type TuiState } from './events/reducer.js'
 import { tuiEventsFromNotification, type TuiEvent } from './events/types.js'
 import type { HarnessClient } from './harness/client.js'
 import { PERMISSION_LEVELS, permissionLabel, resolvePermission, type PermissionMode } from './permission.js'
+import { AGENT_PRESETS, DEFAULT_AGENT_PRESET, isAgentPreset, presetLabel, type AgentPreset } from './presets.js'
 import { SessionRegistry } from './sessions.js'
 import { Store } from './state/store.js'
 
 /** Callbacks the TUI supplies to the controller for UI-only concerns. */
 export interface ControllerHooks {
-  /** Open a modal (sessions browser / model switch / permission switch). */
-  openModal?: (modal: 'sessions' | 'model' | 'permission') => void
+  /** Open a modal (sessions / model / permission / preset switch). */
+  openModal?: (modal: 'sessions' | 'model' | 'permission' | 'preset') => void
   /** Called when the user quits. */
   onExit?: () => void
 }
@@ -174,6 +175,16 @@ export class SessionController {
     this.apply({ type: 'notice', message: `permission → ${permissionLabel(mode)} (standalone 无法真正切换，需进程内模式)` })
   }
 
+  /** The compose default agent preset (standalone records it only). */
+  currentPreset(): AgentPreset {
+    return DEFAULT_AGENT_PRESET
+  }
+
+  /** The standalone runtime composes agents without a preset roster, so this only records the choice. */
+  async setAgentPreset(preset: AgentPreset): Promise<void> {
+    this.apply({ type: 'notice', message: `preset → ${presetLabel(preset)} (standalone 无 agent-presets roster，仅记录)` })
+  }
+
   /** Clear the rendered chat view. */
   clear(): void {
     this.store.setState(state => ({ ...state, items: [] }))
@@ -271,6 +282,18 @@ export class SessionController {
           break
         }
         await this.setPermissionMode(permission)
+        break
+      }
+      case 'preset': {
+        if (args === '') {
+          this.hooks.openModal?.('preset')
+          break
+        }
+        if (!isAgentPreset(args)) {
+          this.apply({ type: 'error', message: `unknown preset ${args} — ${AGENT_PRESETS.join(' | ')}` })
+          break
+        }
+        await this.setAgentPreset(args)
         break
       }
       case 'exit':

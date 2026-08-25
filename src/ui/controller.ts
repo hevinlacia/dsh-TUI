@@ -10,6 +10,7 @@ import type { TuiState } from '../events/reducer.js'
 import type { Store } from '../state/store.js'
 import type { SessionRegistry } from '../sessions.js'
 import type { PermissionMode } from '../permission.js'
+import type { AgentPreset } from '../presets.js'
 
 /** The UI-facing decision for a pending model interaction (approval/question). */
 export type InteractionDecision =
@@ -35,6 +36,10 @@ export interface TuiController {
   currentPermission(): PermissionMode
   /** Switch the permission level (sandbox + approval policy). */
   setPermissionMode(mode: PermissionMode): Promise<void>
+  /** The compose default agent preset. */
+  currentPreset(): AgentPreset
+  /** Switch the agent preset used to compose new sessions. */
+  setAgentPreset(preset: AgentPreset): Promise<void>
   /** Resolve the pending model-facing interaction (approval/question). */
   resolveInteraction(seq: number, decision: InteractionDecision): boolean
   /** Cancel the pending model-facing interaction (treated as user-declined). */

@@ -13,13 +13,14 @@ import { InputBox } from './InputBox.js'
 import { SessionBrowser } from './SessionBrowser.js'
 import { ModelSwitch } from './ModelSwitch.js'
 import { PermissionSwitch } from './PermissionSwitch.js'
+import { PresetSwitch } from './PresetSwitch.js'
 import { InteractionView } from './InteractionView.js'
 import { NoticeLine } from './NoticeLine.js'
 import { Splash } from './Splash.js'
 import { InfoPanel } from './InfoPanel.js'
 
 /** Modal state shared between controller commands and the UI. */
-export type Modal = 'none' | 'sessions' | 'model' | 'permission'
+export type Modal = 'none' | 'sessions' | 'model' | 'permission' | 'preset'
 
 /** Root component. `modal` is App-local React state; the controller opens it via hooks. */
 export function App(props: {
@@ -82,6 +83,16 @@ export function App(props: {
           current={state.permission}
           onSelect={async mode => {
             await controller.setPermissionMode(mode)
+            setModal('none')
+          }}
+          onClose={() => setModal('none')}
+        />
+      )}
+      {modal === 'preset' && (
+        <PresetSwitch
+          current={controller.currentPreset()}
+          onSelect={async preset => {
+            await controller.setAgentPreset(preset)
             setModal('none')
           }}
           onClose={() => setModal('none')}

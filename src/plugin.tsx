@@ -38,6 +38,7 @@ import {
 } from './official.js'
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
 import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, type PermissionMode } from './permission.js'
+import { DEFAULT_AGENT_PRESET, isAgentPreset, presetLabel, type AgentPreset } from './presets.js'
 import { parseInput } from './commands.js'
 import { runCommand, type CommandHost, type ModalKind } from './commandRunner.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
@@ -92,6 +93,7 @@ class InProcessController implements TuiController, CommandHost {
   private readonly currentId: { current: string }
   private defaultProvider: string
   private defaultModel: string
+  private defaultPreset: AgentPreset
   /** Monotonic id for pending model-facing interactions (approval/question). */
   private interactionSeq = 0
   /** Pending interaction resolvers, keyed by seq (the agent blocks one at a time). */
@@ -105,6 +107,7 @@ class InProcessController implements TuiController, CommandHost {
     hooks: ControllerHooks,
     defaultProvider: string,
     defaultModel: string,
+    defaultPreset: AgentPreset,
   ) {
     this.options = options
     this.store = store
@@ -112,6 +115,7 @@ class InProcessController implements TuiController, CommandHost {
     this.currentId = { current: initialId }
     this.defaultProvider = defaultProvider
     this.defaultModel = defaultModel
+    this.defaultPreset = defaultPreset
   }
 
   // ── TuiController ─────────────────────────────────────────────────────────
@@ -183,6 +187,17 @@ class InProcessController implements TuiController, CommandHost {
     const agent = this.handle?.agent
     if (agent === undefined) return DEFAULT_PERMISSION
     return effectiveSandboxMode(agent.session.events) ?? DEFAULT_PERMISSION
+  }
+
+  /** The compose default agent preset. */
+  currentPreset(): AgentPreset {
+    return this.defaultPreset
+  }
+
+  /** Switch the agent preset used to compose new sessions (applies on /new). */
+  async setAgentPreset(preset: AgentPreset): Promise<void> {
+    this.defaultPreset = preset
+    this.apply({ type: 'notice', message: `preset → ${presetLabel(preset)} (new sessions; /new to start one)` })
   }
 
   /** Switch the permission level: sandbox mode + the matching approval policy. */
@@ -328,7 +343,7 @@ class InProcessController implements TuiController, CommandHost {
     }
     return this.ctx.agents.create({
       sessionId: options.sessionId,
-      meta: { cwd: this.options.cwd },
+      meta: { cwd: this.options.cwd, agentPreset: this.defaultPreset },
       agentOptions,
     })
   }
@@ -483,6 +498,12 @@ function subId(identity: unknown): string {
   return ''
 }
 
+/** Resolve the effective agent preset: plugin config → config file → default. */
+function resolveDefaultPreset(config: Config): AgentPreset {
+  const preset = config.preset ?? loadTuiConfigFile().preset
+  return isAgentPreset(preset ?? '') ? (preset as AgentPreset) : DEFAULT_AGENT_PRESET
+}
+
 /** Build the controller's CliOptions from plugin config → config file → dsh settings. */
 function controllerOptions(config: Config): CliOptions {
   const settings = loadDshSettings()
@@ -539,6 +560,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     options.provider,
     options.model,
+    resolveDefaultPreset(config),
   )
 
   /** Root owns modal state and mirrors the setter into the controller hook. */
