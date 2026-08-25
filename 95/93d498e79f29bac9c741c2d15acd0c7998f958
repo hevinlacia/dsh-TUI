@@ -1,0 +1,23 @@
+AGENTS.md
+  4a39bee216722927 77-82,85-86,88-89,91-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "9593d498e79f29bac9c741c2d15acd0c7998f958",
+  "prompts": {
+    "4a39bee216722927": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0365a-7613-7469-ab6e-106c64ba579f",
+        "model": "medium-model-auto"
+      },
+      "human_author": "hevinlacia",
+      "messages": [],
+      "total_additions": 12,
+      "total_deletions": 6,
+      "accepted_lines": 12,
+      "overriden_lines": 0
+    }
+  }
+}
