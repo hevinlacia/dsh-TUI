@@ -5,7 +5,7 @@
 
 import { useState, type JSX } from 'react'
 import { Box } from 'ink'
-import type { SessionController } from '../controller.js'
+import type { TuiController } from './controller.js'
 import { useStore } from '../state/store.js'
 import { StatusBar } from './StatusBar.js'
 import { MessageList } from './MessageList.js'
@@ -21,7 +21,7 @@ export type Modal = 'none' | 'sessions' | 'model'
 
 /** Root component. `modal` is App-local React state; the controller opens it via hooks. */
 export function App(props: {
-  controller: SessionController
+  controller: TuiController
   modal: Modal
   setModal: (modal: Modal) => void
 }): JSX.Element {

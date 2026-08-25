@@ -1,25 +1,25 @@
 # dsh-tui bundle patch — the interactive terminal front door.
 #
 # This is the plugin layer that `dsh plugin --profile <name> add dsh-tui`
-# applies over an official dsh-base profile. It is the TARGET for the
-# official-client integration (see AGENTS.md → Architecture / Transition).
+# applies over an official dsh-base profile. A top-level patch row targets an
+# EXISTING entry; to ADD a new plugin row use an `insert:` block (below) so the
+# loader mounts `dsh-tui` as a fresh entry over the dsh-base layer.
 #
 # NOTE: this patch assumes the official host plane (dsh-base) + the
-# agent-presets roster are mounted by the profile. The personal dsh-tui
-# currently boots a self-contained `runtime/cordis.yml` (no dsh-base); wiring
-# this patch against a real dsh-base profile is part of the remaining
-# integration (needs a running harness to verify).
+# agent-presets roster are mounted by the profile. Wire the in-process plugin
+# `apply` (src/plugin.tsx) against a running harness to verify.
 
 # The interactive front door. The plugin creates/resumes its agent at runtime
 # through the agent factory, subscribes to session events, and drives the TUI.
 # `DSH_TUI_RESUME_SESSION` resumes a specific session; otherwise a fresh one is
 # created.
-- id: dsh-tui
-  name: 'dsh-tui'
-  inject: ['agents']
-  config:
-    provider: !!js process.env.DSH_TUI_PROVIDER ?? 'deepseek-official'
-    model: !!js process.env.DSH_TUI_MODEL ?? undefined
-    cwd: !!js process.env.DSH_TUI_CWD ?? undefined
-    preset: !!js process.env.DSH_TUI_PRESET ?? undefined
-    sessionId: !!js process.env.DSH_TUI_RESUME_SESSION ?? undefined
+- insert:
+    - id: dsh-tui
+      name: 'dsh-tui'
+      inject: ['agents']
+      config:
+        provider: !!js process.env.DSH_TUI_PROVIDER ?? 'deepseek-official'
+        model: !!js process.env.DSH_TUI_MODEL ?? undefined
+        cwd: !!js process.env.DSH_TUI_CWD ?? undefined
+        preset: !!js process.env.DSH_TUI_PRESET ?? undefined
+        sessionId: !!js process.env.DSH_TUI_RESUME_SESSION ?? undefined

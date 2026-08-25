@@ -132,7 +132,7 @@ export function tuiEventsFromNotification(n: HarnessNotification): TuiEvent[] {
   return eventsFor(raw)
 }
 
-function eventsFor(event: SessionEvent): TuiEvent[] {
+export function eventsFor(event: SessionEvent): TuiEvent[] {
   const data = event.data as Record<string, unknown>
   switch (event.type) {
     case 'user/message': {
