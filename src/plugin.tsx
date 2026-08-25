@@ -309,6 +309,7 @@ class InProcessController implements TuiController, CommandHost {
     // Each agent gets its own scoped approval answerer (agent-scoped listeners
     // only receive their own agent's requests).
     this.registerApprovalAnswerer(handle.agent)
+    this.registerSubagentMonitoring(handle.agent)
     this.store.setState(() => initialState(String(sessionId)))
     // Replay the durable log so a resumed session paints its history.
     for (const event of handle.agent.session.events) {
@@ -357,6 +358,24 @@ class InProcessController implements TuiController, CommandHost {
   private registerUserQuestionProvider(): void {
     this.ctx.userQuestions.registerProvider({
       ask: (request: AskUserQuestionRequest) => this.askQuestion(request),
+    })
+  }
+
+  /** Surface delegated subagent lifecycle (cordis events, not session events). */
+  private registerSubagentMonitoring(agent: Agent): void {
+    // The subagent event names/types aren't a direct dep; subscribe loosely.
+    const subscribe = (agent.ctx.on.bind(agent.ctx)) as (name: string, handler: (...args: unknown[]) => void) => void
+    subscribe('subagent/start', identity => {
+      const id = subId(identity)
+      if (id === '') return
+      this.apply({ type: 'subagent-start', id, label: `subagent(${id})` })
+      this.apply({ type: 'notice', message: `subagent → ${id}` })
+    })
+    subscribe('subagent/end', identity => {
+      const id = subId(identity)
+      if (id === '') return
+      this.apply({ type: 'subagent-end', id })
+      this.apply({ type: 'notice', message: `subagent ${id} finished` })
     })
   }
 
@@ -451,6 +470,16 @@ function randomPart(): string {
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Extract a stable id from a subagent event identity (defensive; types minified). */
+function subId(identity: unknown): string {
+  if (identity === null || typeof identity !== 'object') return ''
+  const it = identity as Record<string, unknown>
+  if (typeof it.childId === 'string') return it.childId
+  if (typeof it.runId === 'string') return it.runId
+  if (typeof it.id === 'string') return it.id
+  return ''
 }
 
 /** Build the controller's CliOptions from plugin config → config file → dsh settings. */

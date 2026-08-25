@@ -39,6 +39,8 @@ export interface TuiState {
   pending: PendingInteraction | undefined
   /** The session's effective sandbox/permission mode. */
   permission: PermissionMode
+  /** Active delegated subagents (label + id), for a status indicator. */
+  subagents: { id: string; label: string }[]
 }
 
 /** Fresh state for a session; keeps the previous chat items when resuming. */
@@ -63,6 +65,7 @@ export function initialState(sessionId: string): TuiState {
     turnStartedAt: 0,
     pending: undefined,
     permission: DEFAULT_PERMISSION,
+    subagents: [],
   }
 }
 
@@ -171,6 +174,10 @@ export function reduce(state: TuiState, event: TuiEvent): TuiState {
       return { ...state, notice: event.message }
     case 'permission':
       return { ...state, permission: event.mode }
+    case 'subagent-start':
+      return { ...state, subagents: [...state.subagents.filter(item => item.id !== event.id), { id: event.id, label: event.label }] }
+    case 'subagent-end':
+      return { ...state, subagents: state.subagents.filter(item => item.id !== event.id) }
     case 'interaction-open':
       return { ...state, pending: event.pending }
     case 'interaction-close':

@@ -142,6 +142,8 @@ export type TuiEvent =
   | { type: 'error'; message: string }
   | { type: 'notice'; message: string }
   | { type: 'permission'; mode: PermissionMode }
+  | { type: 'subagent-start'; id: string; label: string }
+  | { type: 'subagent-end'; id: string }
   | { type: 'interaction-open'; pending: PendingInteraction }
   | { type: 'interaction-close' }
 

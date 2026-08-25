@@ -66,6 +66,7 @@ export function StatusBar(props: { state: TuiState; cwd: string; gitBranch: stri
         <Text dimColor>{` · ${phase}`}</Text>
         <Text dimColor>{` · ${tools}`}</Text>
         <Text color={perm.color}>{` · ${perm.tag}`}</Text>
+        {state.subagents.length > 0 && <Text color={palette.toolRun}>{` · ${state.subagents.length} 子代理`}</Text>}
         <Text dimColor>{elapsed > 0 ? ` · ${elapsed}s` : ''}</Text>
         <Text color={palette.accent} dimColor>{` · ctx ${compactTokens(contextUsed)}/${state.contextWindow > 0 ? compactTokens(state.contextWindow) : '–'} ${contextPct}${contextRemaining}`}</Text>
         <Text dimColor>
