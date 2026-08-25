@@ -96,12 +96,13 @@ export function parseOptions(argv: string[]): CliOptions {
         positional.push(arg)
     }
   }
-  const model = resolveModel(configModel())
+  const cfg = loadTuiConfigFile()
+  const model = resolveModel(configModel(), cfg)
   return {
     task: positional.length > 0 ? positional.join(' ') : undefined,
     replay,
     dryRun,
-    cwd: resolve(cwdOverride ?? process.env.DSH_TUI_CWD ?? process.cwd()),
+    cwd: resolve(cwdOverride ?? process.env.DSH_TUI_CWD ?? cfg.cwd ?? process.cwd()),
     jsonrpcBin: process.env.DSH_TUI_JSONRPC_BIN ?? jsonrpcBin,
     cordis: process.env.DSH_TUI_CORDIS ?? cordis,
     provider: model.provider,
@@ -111,19 +112,19 @@ export function parseOptions(argv: string[]): CliOptions {
   }
 }
 
-/** Resolve provider/model/modelOptions from env (wins) → dsh settings → fallback. */
+/** Resolve provider/model/modelOptions from env (wins) → config file → dsh settings → fallback. */
 function resolveModel(env: {
   provider: string | undefined
   model: string | undefined
   modelIds: string[]
-}): { provider: string; model: string; modelOptions: ModelOption[] } {
+}, cfg: TuiConfigFile): { provider: string; model: string; modelOptions: ModelOption[] } {
   const dsh = loadDshSettings()
   const fallback: ModelOption[] = [
     { provider: 'deepseek-official', id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
   ]
   const base = dsh?.modelOptions ?? fallback
-  const provider = env.provider ?? dsh?.defaultProvider ?? base[0]?.provider ?? 'deepseek-official'
-  const model = env.model ?? dsh?.defaultModel ?? base[0]?.id ?? 'deepseek-v4-flash'
+  const provider = env.provider ?? cfg.provider ?? dsh?.defaultProvider ?? base[0]?.provider ?? 'deepseek-official'
+  const model = env.model ?? cfg.model ?? dsh?.defaultModel ?? base[0]?.id ?? 'deepseek-v4-flash'
   const modelOptions = env.modelIds.length > 0
     ? env.modelIds.map(id => ({ provider: env.provider ?? provider, id, name: id }))
     : base
@@ -163,6 +164,44 @@ export function loadDshSettings(): DshSettings | null {
 /** `$DSH_HOME` (default `~/.dsh`) — the DeepSeek Harness home the runtime reads. */
 export function dshHome(): string {
   return process.env.DSH_HOME ?? `${homedir()}/.dsh`
+}
+
+/** dsh-tui's own config-file fields (NOT dsh's `settings.yaml`). */
+export interface TuiConfigFile {
+  provider?: string
+  model?: string
+  cwd?: string
+  preset?: string
+}
+
+/** The default config-file path; `DSH_TUI_CONFIG` overrides it. */
+export function tuiConfigPath(): string {
+  if (process.env.DSH_TUI_CONFIG !== undefined && process.env.DSH_TUI_CONFIG !== '') {
+    return resolve(process.env.DSH_TUI_CONFIG)
+  }
+  const configHome = process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config')
+  return join(configHome, 'dsh-tui', 'config.yaml')
+}
+
+/**
+ * Read dsh-tui's default config file (missing/invalid → empty object). It sits
+ * between explicit (env/patch/flag) and the dsh settings default in the
+ * resolve chain, so a user can set provider/model/cwd once without repeating
+ * them on every invocation.
+ */
+export function loadTuiConfigFile(): TuiConfigFile {
+  try {
+    const raw = readFileSync(tuiConfigPath(), 'utf8')
+    const doc = parse(raw) as Record<string, unknown>
+    return {
+      provider: typeof doc['provider'] === 'string' ? doc['provider'] : undefined,
+      model: typeof doc['model'] === 'string' ? doc['model'] : undefined,
+      cwd: typeof doc['cwd'] === 'string' ? doc['cwd'] : undefined,
+      preset: typeof doc['preset'] === 'string' ? doc['preset'] : undefined,
+    }
+  } catch {
+    return {}
+  }
 }
 
 /** Model env overrides (provider + model + ids) — all optional. */

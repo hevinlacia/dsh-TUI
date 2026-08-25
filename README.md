@@ -77,6 +77,27 @@ dsh-tui --replay fixtures/sample-conversation.jsonl
 
 ## Configuration
 
+### Default config file
+
+A dsh-tui config file (default `~/.config/dsh-tui/config.yaml`, overridable via
+`DSH_TUI_CONFIG`) holds shared defaults for **both** the standalone CLI and the
+in-process plugin. Copy `config.example.yaml` to that path and set the fields
+you want. Resolve chain for provider/model/cwd:
+
+```
+explicit (env / --flag / cordis patch)  >  config file  >  dsh settings  >  built-in default
+```
+
+```yaml
+# ~/.config/dsh-tui/config.yaml
+provider: llm-provider-router
+model: high-model-auto
+cwd: /home/hevin/Developer
+preset: standard
+```
+
+### Env / flags
+
 | Option | Env Var | Default | Meaning |
 | --- | --- | --- | --- |
 | `--jsonrpc-bin <path>` | `DSH_TUI_JSONRPC_BIN` | installed `dsh-jsonrpc-agent` | runtime executable (local harness clone as fallback) |

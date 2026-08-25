@@ -1,0 +1,21 @@
+# dsh-tui default config.
+#
+# Copy this to `~/.config/dsh-tui/config.yaml` (or point DSH_TUI_CONFIG
+# elsewhere). It is read by BOTH the standalone CLI (`dsh-tui`) and the
+# in-process plugin (`dsh --profile <name>`); an explicit env / `--patch` flag
+# always wins over these values.
+#
+# Missing or malformed file → dsh-tui falls back to the dsh settings default
+# (`~/.dsh/settings.yaml`), then the built-in DeepSeek fallback.
+
+# Provider route id (a key in `llm-pi-ai.providers`; see `~/.dsh/settings.yaml`).
+# provider: llm-provider-router
+
+# Model id interpreted by the provider (e.g. `high-model-auto`).
+# model: high-model-auto
+
+# Default working directory for sessions (a path).
+# cwd: /home/hevin/Developer
+
+# Agent preset used when composing new sessions (standard / code / minimal / cordis).
+# preset: standard

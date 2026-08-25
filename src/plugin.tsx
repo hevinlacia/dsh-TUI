@@ -33,7 +33,7 @@ import {
   type SessionEvent,
   type SessionId,
 } from './official.js'
-import { dshHome, loadDshSettings, type CliOptions, type ModelOption } from './config.js'
+import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
 import { parseInput } from './commands.js'
 import { runCommand, type CommandHost, type ModalKind } from './commandRunner.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
@@ -417,13 +417,14 @@ function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** Build the controller's CliOptions from plugin config + dsh settings. */
+/** Build the controller's CliOptions from plugin config → config file → dsh settings. */
 function controllerOptions(config: Config): CliOptions {
   const settings = loadDshSettings()
-  const provider = config.provider ?? settings?.defaultProvider ?? 'deepseek-official'
-  const model = config.model ?? settings?.defaultModel ?? 'deepseek-v4-flash'
+  const cfg = loadTuiConfigFile()
+  const provider = config.provider ?? cfg.provider ?? settings?.defaultProvider ?? 'deepseek-official'
+  const model = config.model ?? cfg.model ?? settings?.defaultModel ?? 'deepseek-v4-flash'
   const modelOptions = settings?.modelOptions ?? [{ provider, id: model, name: model }]
-  const cwd = config.cwd ?? process.cwd()
+  const cwd = config.cwd ?? cfg.cwd ?? process.cwd()
   return {
     task: undefined,
     replay: undefined,
