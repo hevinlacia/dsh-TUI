@@ -15,7 +15,8 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readdirSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { decompress } from 'fzstd'
 import { join } from 'node:path'
 import React, { useState, type JSX } from 'react'
 import { render } from 'ink'
@@ -53,6 +54,31 @@ import type { TuiController, InteractionDecision } from './ui/controller.js'
 export const name = 'dsh-tui'
 /** Agent registry, user-question, approval + harness command services the TUI drives. */
 export const inject = ['agents', 'userQuestions', 'approval', 'commands', 'agentPresets']
+
+/**
+ * Read the last `session/title` event's title from a compressed session log.
+ * Returns '' when the file is missing, undecodable, or has no title yet.
+ */
+function readSessionTitle(file: string): string {
+  try {
+    const text = Buffer.from(decompress(readFileSync(file))).toString('utf8')
+    let title = ''
+    for (const line of text.split('\n')) {
+      if (line === '') continue
+      try {
+        const event = JSON.parse(line) as { type?: string; data?: { title?: unknown } }
+        if (event.type === 'session/title' && typeof event.data?.title === 'string' && event.data.title !== '') {
+          title = event.data.title
+        }
+      } catch {
+        // Skip a malformed line.
+      }
+    }
+    return title
+  } catch {
+    return ''
+  }
+}
 
 /** dsh-tui plugin configuration. */
 export interface Config {
@@ -331,7 +357,7 @@ class InProcessController implements TuiController, CommandHost {
           const stat = statSync(full)
           results.push({
             id: entry.name,
-            title: '',
+            title: readSessionTitle(join(full, 'session.jsonl.zstd')),
             createdAt: stat.birthtimeMs,
             updatedAt: stat.mtimeMs,
             messageCount: 0,
