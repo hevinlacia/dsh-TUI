@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readdirSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import React, { useState, type JSX } from 'react'
 import { render } from 'ink'
@@ -40,6 +40,7 @@ import { reduce, initialState, type TuiState } from './events/reducer.js'
 import { eventsFor, type TuiEvent } from './events/types.js'
 import type { SessionEvent as LocalSessionEvent } from './harness/types.js'
 import { Store } from './state/store.js'
+import type { SessionMeta } from './sessions.js'
 import { App, type Modal } from './ui/App.js'
 import type { TuiController, InteractionDecision } from './ui/controller.js'
 
@@ -133,8 +134,9 @@ class InProcessController implements TuiController, CommandHost {
   }
 
   sessions(): ReturnType<import('./sessions.js').SessionRegistry['list']> {
-    // Phase 1: no in-process session cursor/browser; `/resume <id>` works by id.
-    return []
+    // Phase 1.5: list durable sessions from the shared storage layout (ids +
+    // timestamps). Titles need zstd log decompression, so leave them empty.
+    return this.listPersistedSessions()
   }
 
   /** Submit one input line: slash command or prompt. */
@@ -223,13 +225,18 @@ class InProcessController implements TuiController, CommandHost {
   private resolveSessionId(input: string): string {
     const trimmed = input.trim()
     if (trimmed === '') return trimmed
-    return this.scanPersistedSessionId(trimmed) ?? trimmed
+    const matches = this.listPersistedSessions()
+      .filter(entry => entry.id.startsWith(trimmed))
+      .map(entry => entry.id)
+    if (matches.length === 1) return matches[0]!
+    if (matches.length > 1) throw new Error(`ambiguous session "${trimmed}" — ${matches.join(', ')}`)
+    return trimmed
   }
 
-  /** Best-effort prefix match against the durable session-store layout. */
-  private scanPersistedSessionId(prefix: string): string | undefined {
+  /** Enumerate durable session dirs under the shared storage root (newest first). */
+  private listPersistedSessions(): SessionMeta[] {
     const root = join(dshHome(), 'sessions')
-    const matches: string[] = []
+    const results: SessionMeta[] = []
     const walk = (dir: string, depth: number): void => {
       if (depth > 3) return
       let entries: { name: string; isDirectory(): boolean }[] = []
@@ -239,22 +246,29 @@ class InProcessController implements TuiController, CommandHost {
         return
       }
       for (const entry of entries) {
+        if (!entry.isDirectory()) continue
         const full = join(dir, entry.name)
-        if (entry.isDirectory()) {
-          // Session ids are leaf dirs (`session-6532a0a0664f`); skip the
-          // `--<cwd-slug>--` grouping dirs (they start with `--`) and recurse.
-          if (entry.name.startsWith(prefix) && !entry.name.startsWith('--')) {
-            matches.push(entry.name)
-          } else {
-            walk(full, depth + 1)
-          }
+        // `--<cwd-slug>--` are grouping dirs; recurse into them, skip as ids.
+        if (entry.name.startsWith('--')) {
+          walk(full, depth + 1)
+          continue
+        }
+        try {
+          const stat = statSync(full)
+          results.push({
+            id: entry.name,
+            title: '',
+            createdAt: stat.birthtimeMs,
+            updatedAt: stat.mtimeMs,
+            messageCount: 0,
+          })
+        } catch {
+          // Unreadable entry (e.g. a stray file); skip it.
         }
       }
     }
     walk(root, 0)
-    if (matches.length === 1) return matches[0]
-    if (matches.length > 1) throw new Error(`ambiguous session "${prefix}" — ${matches.join(', ')}`)
-    return undefined
+    return results.sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
   /** Create/resume an agent and (re)point the store at its session. */
