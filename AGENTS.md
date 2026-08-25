@@ -85,8 +85,10 @@ to:
    profile bundle: `dsh plugin --profile <name> add <pkg>`) — DONE (the plugin
    is the primary entry).
 2. Switch to the official agent-presets (`standard` / `minimal` / `code` /
-   `cordis`) instead of the hand-rolled `agent-spine-demo` tree — still open
-   (agents are composed via explicit agentOptions, not preset rosters).
+   `cordis`) instead of the hand-rolled `agent-spine-demo` tree — DONE (the
+   profile mounts the `agent-presets` roster and the in-process controller's
+   `setup` mounts the selected preset per session; host tool rows are disabled
+   so the preset owns the tools).
 3. Introduce the `@deepseek-ai/*` adapter boundary and drop the raw JSON-RPC
    subprocess in favor of in-process Cordis service consumption — DONE at the
    adapter boundary (`src/official.ts`), the JSON-RPC path is legacy-only.

@@ -4,12 +4,14 @@
 # overlays still to come.
 #
 # The TUI creates (or resumes) its agent at runtime through the agent factory
-# and passes explicit agentOptions (provider/model) at that point. It does NOT
-# use the agent-presets roster, so the host tool rows dsh-base owns (tool-bash,
-# tool-fs, skills, plan, approval, sandbox, …) are inherited unchanged — the
-# new session needs them to actually work. To run, the agent only needs a model
-# route (llm-pi-ai / llm-deepseek via settings), credentials, and a stable
-# session store; all three come from dsh-base already.
+# and mounts the agent-presets roster (`agent-presets`, default `standard`) so
+# every session composes its agent from a preset instead of the host tool rows.
+# The 23 host rows dsh-base would otherwise own (tool-bash, tool-fs, skills,
+# plan, compaction, subagent-control, …) are disabled below so the preset's
+# tools do not double up; the registries, sandbox + approval stack,
+# persistence, and model route stay on the host plane. To run, the agent only
+# needs a model route, credentials, and a stable session store; all three come
+# from dsh-base already.
 
 # ── surface-specific values over the dsh-base layer ─────────────────────────
 
@@ -36,16 +38,107 @@
 # ── the dsh-tui front door ──────────────────────────────────────────────────
 
 - insert:
+    # The preset roster: `config/agent-presets/` ships with the deployment and
+    # is read-only; `$DSH_HOME/.agent-presets` is where a person or an agent
+    # authors their own. `default` is the preset a session mounts when none is
+    # named. Only the shipped root is an assembly fact, so composeProfile
+    # patches it in like any other deployment row.
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: standard
+
     # The interactive front door. The plugin creates/resumes its agent at
     # runtime, subscribes to session events, and drives the TUI (see
     # src/plugin.tsx). `DSH_TUI_RESUME_SESSION` resumes a specific session;
     # otherwise a fresh one is created.
     - id: dsh-tui
       name: 'dsh-tui'
-      inject: [agents, userQuestions, approval, commands]
+      inject: [agents, userQuestions, approval, commands, agentPresets]
       config:
         provider: !!js process.env.DSH_TUI_PROVIDER ?? undefined
         model: !!js process.env.DSH_TUI_MODEL ?? undefined
         cwd: !!js process.env.DSH_TUI_CWD ?? undefined
         preset: !!js process.env.DSH_TUI_PRESET ?? undefined
         sessionId: !!js process.env.DSH_TUI_RESUME_SESSION ?? undefined
+
+# ── the agent plane moves behind agent presets ─────────────────────────────
+#
+# Each row below composes what ONE agent contributes to the host registries:
+# its tools, prompt sections, and delegation backends. dsh-base keeps them for a
+# single-session TUI (it composes its agent process-wide). Because this profile
+# mounts the agent-presets roster (every session now composes a preset instead),
+# these host rows are disabled here so the preset's tools do not double up.
+#
+# Disabling rather than deleting is deliberate: the base is shared, and a row
+# absent from a surface overlay would silently reappear the day someone
+# reorders the composition.
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true
+
+- id: tool-jobs
+  disabled: true
+
+- id: tool-fs
+  disabled: true
+
+- id: tool-fs-search
+  disabled: true
+
+- id: tool-str-replace-editor
+  disabled: true
+
+- id: skill-filesystem
+  disabled: true
+
+- id: tool-skill
+  disabled: true
+
+- id: tool-goal
+  disabled: true
+
+- id: plan-mode
+  disabled: true
+
+- id: compaction-basic
+  disabled: true
+
+- id: command-compact
+  disabled: true
+
+- id: tool-result-pruner
+  disabled: true
+
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-subagent
+  disabled: true
+
+- id: tool-subagent-fork
+  disabled: true
+
+- id: workflow-worker-thread
+  disabled: true
+
+- id: tool-workflow
+  disabled: true
+
+- id: tool-ralph
+  disabled: true
+
+- id: agent-instructions
+  disabled: true
+
+- id: tool-todo
+  disabled: true
+
+- id: tool-web
+  disabled: true

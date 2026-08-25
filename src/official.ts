@@ -21,6 +21,25 @@ import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { effectiveSandboxMode, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import type { CommandRuntime } from '@deepseek-ai/dsh-commands'
 
+/**
+ * Structural view of the agent-presets roster service (`agentPresets`). The
+ * real type lives in `@deepseek-ai/dsh-agent-presets` (a deployment package, not
+ * a dev dep of this repo); this minimal shape keeps the plugin typed without
+ * pulling that package in. Matches the api-proxy's use:
+ * `presets.mount(agentCtx, id)` in the agent factory's `setup`.
+ */
+export interface AgentPresetsService {
+  mount(agentCtx: Context, id?: string): Promise<{ id: string }>
+  list(): Promise<Array<{ id: string }>>
+  resolve(id?: string): Promise<{ id: string }>
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    agentPresets?: AgentPresetsService
+  }
+}
+
 export { Schema, createUserMessage, setSandboxMode, effectiveSandboxMode }
 export type {
   Context,
