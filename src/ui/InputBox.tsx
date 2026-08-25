@@ -1,8 +1,14 @@
 /**
- * I1 — input box: a Claude-Code-style single-line prompt framed by two
- * horizontal rules, with history (↑/↓), Tab completion for slash commands and
- * file paths, a live slash-command dropdown that narrows as you type, and a
- * second-level option submenu for commands that take a choice (e.g. `/model`).
+ * I1 — input box: a Claude-Code-style prompt framed by two horizontal rules,
+ * with history (↑/↓ single-line, Ctrl+P/Ctrl+N always), Tab completion for
+ * slash commands and file paths, a live slash-command dropdown that narrows as
+ * you type, and a second-level option submenu for commands that take a choice
+ * (e.g. `/model`).
+ *
+ * Multi-line: Shift+Enter inserts a newline; the caret moves freely in all four
+ * directions (←/→ char, ↑/↓ between logical lines preserving column, Home/End
+ * to the current line start/end). Up/Down fall back to history only on
+ * single-line input, so the box both edits multi-line text and brows history.
  * @module dsh-tui/ui/InputBox
  */
 
@@ -23,7 +29,44 @@ function clamp(index: number, length: number): number {
   return Math.min(Math.max(index, 0), length - 1)
 }
 
-/** One-line prompt with editing, history, Tab completion, command menu + submenu. */
+/** Char index of the start of each logical line (0, then after each `\n`). */
+function lineStarts(value: string): number[] {
+  const starts = [0]
+  for (let i = 0; i < value.length; i++) if (value[i] === '\n') starts.push(i + 1)
+  return starts
+}
+
+/** The 0-based logical line index containing a cursor position. */
+function lineIndexOf(value: string, cursor: number): number {
+  let line = 0
+  for (let i = 0; i < cursor; i++) if (value[i] === '\n') line++
+  return line
+}
+
+/** The column (chars since the last newline) of a cursor position. */
+function colIndexOf(value: string, cursor: number): number {
+  const lastNl = value.lastIndexOf('\n', cursor - 1)
+  return lastNl === -1 ? cursor : cursor - lastNl - 1
+}
+
+/** The cursor position just before a line's newline (or its end for the last line). */
+function lineEnd(value: string, starts: number[], line: number): number {
+  const next = starts[line + 1]
+  return next === undefined ? value.length : next - 1
+}
+
+/** Move the cursor one logical line up/down, clamping the column. */
+function moveLine(value: string, cursor: number, delta: -1 | 1): number {
+  const starts = lineStarts(value)
+  const line = lineIndexOf(value, cursor)
+  const target = line + delta
+  if (target < 0 || target >= starts.length) return cursor
+  const start = starts[target]!
+  const col = Math.min(colIndexOf(value, cursor), lineEnd(value, starts, target) - start)
+  return start + col
+}
+
+/** Input box: editing, history, Tab completion, command menu + submenu. */
 export function InputBox(props: {
   controller: TuiController
   modalOpen: boolean
@@ -169,6 +212,14 @@ export function InputBox(props: {
     }
 
     if (key.return) {
+      if (key.shift) {
+        // Shift+Enter inserts a newline instead of submitting — lets the box
+        // hold multi-line text that the cursor can now move through.
+        setText(value.slice(0, cursor) + '\n' + value.slice(cursor), cursor + 1)
+        setCompletion(undefined)
+        setMenuDismissed(false)
+        return
+      }
       const submitted = value
       applyText('')
       if (submitted.trim() !== '') {
@@ -189,11 +240,19 @@ export function InputBox(props: {
       return
     }
     if (key.upArrow) {
-      navigateHistory(-1, historyRef.current, setText, applyText, historyIndexRef)
+      if (value.includes('\n')) {
+        setCursor(position => moveLine(value, position, -1))
+      } else {
+        navigateHistory(-1, historyRef.current, setText, applyText, historyIndexRef)
+      }
       return
     }
     if (key.downArrow) {
-      navigateHistory(1, historyRef.current, setText, applyText, historyIndexRef)
+      if (value.includes('\n')) {
+        setCursor(position => moveLine(value, position, 1))
+      } else {
+        navigateHistory(1, historyRef.current, setText, applyText, historyIndexRef)
+      }
       return
     }
     if (key.escape) {
@@ -209,11 +268,11 @@ export function InputBox(props: {
       return
     }
     if (key.home) {
-      setText(value, 0)
+      setText(value, lineStarts(value)[lineIndexOf(value, cursor)] ?? 0)
       return
     }
     if (key.end) {
-      setText(value, value.length)
+      setText(value, lineEnd(value, lineStarts(value), lineIndexOf(value, cursor)))
       return
     }
     if (key.backspace) {
@@ -233,6 +292,14 @@ export function InputBox(props: {
     }
     if (key.ctrl && input === 'u') {
       applyText('')
+      return
+    }
+    if (key.ctrl && input === 'p') {
+      navigateHistory(-1, historyRef.current, setText, applyText, historyIndexRef)
+      return
+    }
+    if (key.ctrl && input === 'n') {
+      navigateHistory(1, historyRef.current, setText, applyText, historyIndexRef)
       return
     }
     if (key.ctrl) return
