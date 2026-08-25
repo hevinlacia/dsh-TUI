@@ -14,6 +14,7 @@ import { SessionBrowser } from './SessionBrowser.js'
 import { ModelSwitch } from './ModelSwitch.js'
 import { NoticeLine } from './NoticeLine.js'
 import { Splash } from './Splash.js'
+import { InfoPanel } from './InfoPanel.js'
 
 /** Modal state shared between controller commands and the UI. */
 export type Modal = 'none' | 'sessions' | 'model'
@@ -35,7 +36,12 @@ export function App(props: {
     <Box flexDirection="column" height="100%">
       <Box flexGrow={1} flexShrink={1} flexDirection="column">
         {empty
-          ? <Splash model={state.model} effort={state.effort} cwd={cwd} gitBranch={gitBranch} />
+          ? (
+            <Box flexDirection="row" flexGrow={1}>
+              <Box flexGrow={1}><Splash /></Box>
+              <InfoPanel model={state.model} effort={state.effort} cwd={cwd} gitBranch={gitBranch} />
+            </Box>
+          )
           : <MessageList state={state} thinkingOpen={thinkingOpen} />}
       </Box>
       <NoticeLine state={state} />
