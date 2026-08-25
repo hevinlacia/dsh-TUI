@@ -96,6 +96,8 @@ export function reduce(state: TuiState, event: TuiEvent): TuiState {
         pending: false,
         ...(event.usage !== undefined ? { usage: event.usage } : {}),
         ...(event.interrupted === true ? { interrupted: true as const } : {}),
+        // Freeze the thinking timer at finalization so it stops counting.
+        ...(event.time > 0 ? { thinkingEndedAt: event.time } : {}),
       }))
       if (event.usage === undefined) return patched
       return {
@@ -137,8 +139,9 @@ export function reduce(state: TuiState, event: TuiEvent): TuiState {
       return { ...state, turn: event.turn, step: 0, phase: 'working', turnStartedAt: event.time }
     case 'turn-end':
       // A turn end with no open step/tool settles to idle; the error text, if
-      // any, arrived via a dedicated `error` event.
-      return { ...state, phase: state.activeToolCount > 0 ? 'tool-running' : 'idle' }
+      // any, arrived via a dedicated `error` event. Reset the turn timer so
+      // the footer elapsed stops counting once the turn completes.
+      return { ...state, phase: state.activeToolCount > 0 ? 'tool-running' : 'idle', turnStartedAt: 0 }
     case 'step-start':
       return { ...state, step: event.step, phase: 'thinking' }
     case 'step-end':
@@ -167,7 +170,8 @@ function statusChanged(state: TuiState, phase: AgentPhase): TuiState {
   // tool calls keep the richer local label while running.
   if (phase === 'idle' && state.activeToolCount > 0) return { ...state, phase: 'tool-running' }
   if (phase === 'working') return { ...state, phase: state.activeToolCount > 0 ? 'tool-running' : 'working' }
-  return { ...state, phase }
+  // Settling to idle also stops the turn timer for the footer elapsed.
+  return { ...state, phase, ...(phase === 'idle' ? { turnStartedAt: 0 } : {}) }
 }
 
 function patchAssistant(

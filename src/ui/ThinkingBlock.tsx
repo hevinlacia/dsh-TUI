@@ -10,10 +10,13 @@ import { elapsedSeconds, useNow } from './useNow.js'
 import { palette } from './theme.js'
 
 /** Collapsible reasoning display. */
-export function ThinkingBlock(props: { thinking: string; open: boolean; startedAt?: number }): JSX.Element {
-  const { thinking, open, startedAt } = props
-  const now = useNow(1000)
-  const elapsed = elapsedSeconds(startedAt, now)
+export function ThinkingBlock(props: { thinking: string; open: boolean; startedAt?: number; endedAt?: number }): JSX.Element {
+  const { thinking, open, startedAt, endedAt } = props
+  // Keep ticking only while the thinking is still live (no end time yet); once
+  // finalized, freeze the elapsed so the timer stops rather than growing.
+  const live = startedAt !== undefined && endedAt === undefined
+  const now = useNow(1000, live)
+  const elapsed = endedAt !== undefined ? elapsedSeconds(startedAt, endedAt) : elapsedSeconds(startedAt, now)
   const firstLine = thinking.split('\n')[0] ?? ''
 
   if (!open) {
