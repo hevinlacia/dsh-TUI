@@ -19,6 +19,7 @@ import type {
 } from '@deepseek-ai/dsh-user-questions'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { effectiveSandboxMode, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import type { CommandRuntime } from '@deepseek-ai/dsh-commands'
 
 export { Schema, createUserMessage, setSandboxMode, effectiveSandboxMode }
 export type {
@@ -35,4 +36,5 @@ export type {
   AskUserQuestionRequest,
   UserQuestionProvider,
   SandboxMode,
+  CommandRuntime,
 }

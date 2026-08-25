@@ -50,8 +50,8 @@ import { App, type Modal } from './ui/App.js'
 import type { TuiController, InteractionDecision } from './ui/controller.js'
 
 export const name = 'dsh-tui'
-/** Agent registry, user-question service, and approval service the TUI drives. */
-export const inject = ['agents', 'userQuestions', 'approval']
+/** Agent registry, user-question, approval + harness command services the TUI drives. */
+export const inject = ['agents', 'userQuestions', 'approval', 'commands']
 
 /** dsh-tui plugin configuration. */
 export interface Config {
@@ -151,6 +151,26 @@ class InProcessController implements TuiController, CommandHost {
   async submit(input: string): Promise<boolean> {
     const parsed = parseInput(input)
     if (parsed.kind === 'prompt') {
+      // A leading '/' that is NOT a TUI command may be a harness command
+      // (/plan, /goal, ...) — route it through the commands registry. A
+      // single-word token that resolves to neither is reported; a path
+      // (/a/b) stays a prompt.
+      const trimmed = input.trim()
+      if (trimmed.startsWith('/')) {
+        const agent = this.handle?.agent
+        if (agent !== undefined) {
+          if (this.isHarnessCommand(agent, trimmed)) {
+            await this.runHarnessCommand(trimmed)
+            return true
+          }
+          const colon = trimmed.indexOf(' ')
+          const token = (colon === -1 ? trimmed.slice(1) : trimmed.slice(1, colon)).toLowerCase()
+          if (token !== '' && !token.includes('/')) {
+            this.apply({ type: 'error', message: `unknown command /${token} — try /help` })
+            return true
+          }
+        }
+      }
       this.submitPrompt(parsed.text)
       return true
     }
@@ -473,6 +493,27 @@ class InProcessController implements TuiController, CommandHost {
     if (trimmed === '') return
     const message = createUserMessage({ content: textBlock(trimmed), source: { kind: 'user' } })
     this.handle?.agent.followup(message)
+  }
+
+  /** Whether the leading token is a harness-registered command (not a TUI one). */
+  private isHarnessCommand(agent: import('./official.js').Agent, line: string): boolean {
+    const colon = line.indexOf(' ')
+    const token = (colon === -1 ? line.slice(1) : line.slice(1, colon)).toLowerCase()
+    return token !== '' && this.ctx.commands.find(agent, token) !== undefined
+  }
+
+  /** Run a harness-owned command on the live agent (no model round-trip). */
+  private async runHarnessCommand(line: string): Promise<void> {
+    const agent = this.handle?.agent
+    if (agent === undefined) return
+    try {
+      const execution = await this.ctx.commands.execute(agent, line, [], new AbortController().signal)
+      if (execution === undefined) {
+        this.apply({ type: 'error', message: `unknown command ${line.split(/\s+/u)[0]}` })
+      }
+    } catch (error) {
+      this.apply({ type: 'error', message: errMsg(error) })
+    }
   }
 }
 

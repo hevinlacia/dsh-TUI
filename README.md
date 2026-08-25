@@ -129,6 +129,11 @@ sessions — the choice is passed to the agent factory (`meta.agentPreset`);
 mounting the agent-presets roster (a deliberate profile change, like the web
 profile) makes it change the tool world.
 
+Known `/` commands not handled by the TUI (e.g. `/plan`, `/goal`) are routed to
+the harness command registry, so they execute without a model round-trip. A
+single-word `/foo` that resolves to neither the TUI nor a harness command is
+reported as unknown; a path like `/a/b` is submitted as text.
+
 ## Deliberately out of scope (phase 1)
 
 Clipboard, mouse, splash/logo animation, custom renderer, Yoga/layout engine,
