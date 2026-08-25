@@ -204,13 +204,11 @@ class InProcessController implements TuiController, CommandHost {
   private async attach(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<void> {
     const previous = this.handle
     this.handle = undefined
-    if (previous) {
-      // Detach cleanly only after the new agent is ready — if the new attach
-      // throws, the stale handle stays bound until the caller re-creates.
-      void previous.dispose()
-    }
+    // Create the replacement FIRST; only dispose the old handle once the new
+    // one is ready, so a failed create leaves the previous session intact.
     const handle = await this.createOrResume(options)
     this.handle = handle
+    if (previous) void previous.dispose()
     const sessionId = handle.agent.id
     this.currentId.current = String(sessionId)
     this.store.setState(() => initialState(String(sessionId)))
