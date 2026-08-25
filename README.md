@@ -117,8 +117,8 @@ preset: standard
 ## Commands inside the TUI
 
 `/help` `/status` `/context` `/new` `/resume [id]` `/sessions` `/model [name]`
-`/permission [mode]` `/preset [name]` `/clear` `/exit` — plus `↑/↓` history,
-`Tab` completion, `t` thinking toggle.
+`/permission [mode]` `/preset [name]` `/commands` `/clear` `/exit` — plus
+`↑/↓` history, `Tab` completion, `t` thinking toggle.
 
 `/permission` (no arg) opens a picker for the three DSH sandbox levels
 (`read-only` / `workspace-write` / `danger-full-access`); `/permission <mode>`
