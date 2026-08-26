@@ -36,6 +36,18 @@ export const palette = {
   commandName: 'yellowBright',
   commandItem: 'gray',
   commandSelected: 'blueBright',
+
+  // Pixel-whale splash hero (reference style). Four-tone sprite from the
+  // DeepSeek pixel whale: deep-navy outline, DeepSeek-blue body, ice-blue
+  // belly, white mouth. The `DEEPSEEK`/`HARNESS` wordmark uses a filled blue
+  // and a faded blue sub-line. Kept separate from the core semantic tokens so
+  // tuning the hero never ripples into the chat UI.
+  whaleOutline: '#142660',
+  whaleBody: '#4e6fff',
+  whaleBelly: '#bee1ff',
+  whaleMouth: '#ffffff',
+  wordmarkFill: '#4e6fff',
+  wordmarkFade: '#93b0e9',
 } as const
 
 export type PaletteColor = (typeof palette)[keyof typeof palette]

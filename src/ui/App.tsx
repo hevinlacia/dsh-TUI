@@ -17,7 +17,6 @@ import { PresetSwitch } from './PresetSwitch.js'
 import { InteractionView } from './InteractionView.js'
 import { NoticeLine } from './NoticeLine.js'
 import { Splash } from './Splash.js'
-import { InfoPanel } from './InfoPanel.js'
 
 /** Modal state shared between controller commands and the UI. */
 export type Modal = 'none' | 'sessions' | 'model' | 'permission' | 'preset'
@@ -41,9 +40,8 @@ export function App(props: {
       <Box flexGrow={1} flexShrink={1} flexDirection="column">
         {empty
           ? (
-            <Box flexDirection="row" flexGrow={1}>
-              <Box flexGrow={1}><Splash /></Box>
-              <InfoPanel model={state.model} effort={state.effort} cwd={cwd} gitBranch={gitBranch} />
+            <Box flexGrow={1}>
+              <Splash model={state.model} effort={state.effort} cwd={cwd} gitBranch={gitBranch} />
             </Box>
           )
           : <MessageList state={state} thinkingOpen={thinkingOpen} scrollActive={modal === 'none' && pending === undefined} />}
