@@ -4,7 +4,7 @@
  * profile host plane (the canonical client path).
  *
  * Usage:
- *   dsh-tui                            # boot profile $DSH_TUI_PROFILE ?? 'dsh-tui'
+ *   dsh-tui                            # boot profile $DSH_TUI_PROFILE ?? 'tui'
  *   dsh-tui --profile <name>           # boot a specific profile
  *   dsh-tui --dry-run                  # print the boot command, don't run
  *   dsh-tui [task...]                  # pass a one-shot task to the harness
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 // This package's root (one level above bin/).
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-let profile = process.env.DSH_TUI_PROFILE ?? 'dsh-tui'
+let profile = process.env.DSH_TUI_PROFILE ?? 'tui'
 let dryRun = false
 const passthrough = []
 
