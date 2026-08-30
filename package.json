@@ -2,12 +2,11 @@
   "name": "dsh-tui",
   "version": "0.3.0",
   "private": true,
-  "description": "Official-client terminal UI for DeepSeek Harness (Cordis plugin; standalone JSON-RPC client also available)",
+  "description": "Official-client terminal UI for DeepSeek Harness (Cordis plugin for dsh --profile tui)",
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "dsh-tui": "./bin/dsh-tui.js",
-    "dsh-tui-standalone": "./bin/dsh-tui-standalone.js"
+    "dsh-tui": "./bin/dsh-tui.js"
   },
   "main": "lib/plugin.js",
   "types": "lib/plugin.d.ts",
@@ -39,7 +38,6 @@
     "build": "tsc -p tsconfig.json",
     "clean": "node scripts/clean.mjs",
     "dev": "pnpm run build && node ./bin/dsh-tui.js",
-    "probe": "node scripts/probe-runtime.mjs",
     "smoke": "node scripts/smoke.mjs",
     "check": "pnpm run build && pnpm run smoke"
   },
@@ -67,7 +65,6 @@
     "@deepseek-ai/dsh-plan-mode": "^0.1.0-rc.6 || ^0.1.1-rc.1",
     "@deepseek-ai/dsh-sandbox": "^0.1.0-rc.6 || ^0.1.1-rc.1",
     "@deepseek-ai/dsh-sandbox-policy": "^0.1.0-rc.6 || ^0.1.1-rc.1",
-    "@deepseek-ai/dsh-sdk-jsonrpc-server": "^0.1.0-rc.6 || ^0.1.1-rc.1",
     "@deepseek-ai/dsh-session": "^0.1.0-rc.6 || ^0.1.1-rc.1",
     "@deepseek-ai/dsh-session-checkpoint-policy": "^0.1.0-rc.6 || ^0.1.1-rc.1",
     "@deepseek-ai/dsh-session-persistence-jsonl": "^0.1.0-rc.6 || ^0.1.1-rc.1",
@@ -103,8 +100,6 @@
     "@deepseek-ai/dsh-plan-mode": "0.1.1-rc.2",
     "@deepseek-ai/dsh-sandbox": "0.1.1-rc.2",
     "@deepseek-ai/dsh-sandbox-policy": "0.1.1-rc.2",
-    "@deepseek-ai/dsh-sdk-jsonrpc-demo": "0.1.1-rc.2",
-    "@deepseek-ai/dsh-sdk-jsonrpc-server": "0.1.1-rc.2",
     "@deepseek-ai/dsh-session": "0.1.1-rc.2",
     "@deepseek-ai/dsh-session-checkpoint-policy": "0.1.1-rc.2",
     "@deepseek-ai/dsh-session-persistence-jsonl": "0.1.1-rc.2",

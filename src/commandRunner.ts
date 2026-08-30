@@ -1,13 +1,9 @@
 /**
- * Transport-agnostic slash-command execution. The standalone JSON-RPC
- * `SessionController` and the in-process Cordis plugin's controller both
- * drive the same command vocabulary; the pieces that differ (how a prompt is
- * submitted, how a model is switched, how a session is resumed/created) are
- * injected as host primitives.
+ * Slash-command execution for the in-process plugin controller.
  *
- * NOTE: the standalone controller keeps its own private `runCommand` so the
- * already-working CLI path is not touched. This module backs the in-process
- * plugin controller (and any future controller that reuses the vocabulary).
+ * The plugin controller (`src/plugin.tsx`) drives this vocabulary; the pieces
+ * that differ across hosts (how a prompt is submitted, how a model is switched,
+ * how a session is resumed/created) are injected as host primitives.
  * @module dsh-tui/commandRunner
  */
 

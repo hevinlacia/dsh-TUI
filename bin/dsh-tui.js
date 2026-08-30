@@ -11,8 +11,7 @@
  *
  * The first run auto-creates the profile by installing THIS package into it
  * (`dsh plugin --profile <name> add <this pkg>`), then boots `dsh --profile
- * <name>`. The older JSON-RPC subprocess client is kept at `dsh-tui-standalone`
- * (legacy).
+ * <name>`.
  * @module dsh-tui/bin
  */
 

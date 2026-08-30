@@ -1,10 +1,10 @@
 /**
  * The minimal event vocabulary between the Harness runtime and the TUI.
  *
- * `TuiEvent` is the only surface the UI consumes. The wire mapping
- * ( {@link tuiEventsFromNotification} ) translates official JSON-RPC
- * notifications (`session.event` / `session.status`) into this vocabulary and
- * drops everything else. See docs/protocol.md for the provenance table.
+ * `TuiEvent` is the only surface the UI consumes. The plugin projects official
+ * `SessionEvent`s through {@link eventsFor}; {@link tuiEventsFromNotification}
+ * adapts the same events from fixture frames for the keyless replay path.
+ * Unknown event types are dropped. See AGENTS.md → Architecture Entry.
  * @module dsh-tui/events/types
  */
 

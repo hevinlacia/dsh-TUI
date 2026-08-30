@@ -1,10 +1,8 @@
 /**
  * Slash-command vocabulary and input parsing. Pure; execution lives in the
- * session controller so commands can touch the store and the runtime.
+ * plugin controller (`src/commandRunner.ts`).
  * @module dsh-tui/commands
  */
-
-import type { CliOptions } from './config.js'
 
 /** One registered command's contract. */
 export interface CommandSpec {
@@ -56,9 +54,4 @@ export function lookupCommand(name: string): CommandSpec | undefined {
 /** Command names to use for completion. */
 export function commandNames(): string[] {
   return COMMANDS.map(command => command.name)
-}
-
-/** The full model id list a user can switch to. */
-export function modelList(options: CliOptions): string[] {
-  return options.modelOptions.map(option => option.id)
 }

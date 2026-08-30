@@ -2,17 +2,11 @@
  * The official `@deepseek-ai/*` adapter boundary.
  *
  * ALL imports of official DeepSeek Harness packages belong in this file (or a
- * `src/adapter/` folder). The UI layer — `src/ui/*`, `src/controller.ts`,
- * `src/channel.ts`, hooks and screens — reaches official types and services
- * only through this facade, so the TUI stays decoupled from the harness's
- * domain ownership (agent/model/tool/session/persistence/policy stay with the
- * runtime).
- *
- * The client currently speaks the SDK JSON-RPC wire (`@deepseek-ai/
- * dsh-sdk-jsonrpc-server` via a spawned subprocess) and reads
- * `$DSH_HOME/settings.yaml` itself; `src/` imports no official package today.
- * This module is the single, intentional seam: any future official import goes
- * here (and its friends), never in UI code. See AGENTS.md → Adapter boundary.
+ * `src/adapter/` folder). The UI layer — `src/ui/*`, `src/plugin.tsx` logic —
+ * reaches official types and services only through this facade, so the TUI
+ * stays decoupled from the harness's domain ownership (agent/model/tool/
+ * session/persistence/policy stay with the runtime). The in-process Cordis
+ * plugin consumes those services over `src/official.ts`.
  * @module dsh-tui/adapter
  */
 
@@ -22,7 +16,6 @@ export const adapterContract = {
   versionLine: '0.1.1-rc.2',
   /** Official packages the runtime composes and the client relies on. */
   runtimePackages: [
-    '@deepseek-ai/dsh-sdk-jsonrpc-server',
     '@deepseek-ai/dsh-agent-spine-demo',
     '@deepseek-ai/dsh-llm-deepseek',
     '@deepseek-ai/dsh-llm-pi-ai',

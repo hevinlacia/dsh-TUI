@@ -1,14 +1,14 @@
 /**
- * The UI-facing controller contract. Both the JSON-RPC-backed
- * `SessionController` (standalone CLI) and the in-process Cordis plugin's
- * controller satisfy this, so the Ink components never depend on the transport.
+ * The UI-facing controller contract. The in-process Cordis plugin controller
+ * (`src/plugin.tsx`) satisfies this, so the Ink components never depend on the
+ * transport.
  * @module dsh-tui/ui/controller
  */
 
 import type { CliOptions, ModelOption } from '../config.js'
 import type { TuiState } from '../events/reducer.js'
 import type { Store } from '../state/store.js'
-import type { SessionRegistry } from '../sessions.js'
+import type { SessionMeta } from '../sessions.js'
 import type { PermissionMode } from '../permission.js'
 import type { AgentPreset } from '../presets.js'
 
@@ -25,7 +25,7 @@ export interface TuiController {
   /** Local git branch for the workspace cwd ('' when not a repo). */
   gitBranch(): string
   /** Named sessions for the browser. */
-  sessions(): ReturnType<SessionRegistry['list']>
+  sessions(): SessionMeta[]
   /** Submit one input line (slash command or prompt). */
   submit(input: string): Promise<boolean>
   /** Resume an existing session id. */

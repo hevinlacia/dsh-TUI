@@ -168,7 +168,7 @@ class InProcessController implements TuiController, CommandHost {
     }
   }
 
-  sessions(): ReturnType<import('./sessions.js').SessionRegistry['list']> {
+  sessions(): SessionMeta[] {
     // Phase 1.5: list durable sessions from the shared storage layout (ids +
     // timestamps). Titles need zstd log decompression, so leave them empty.
     return this.listPersistedSessions()
@@ -612,16 +612,10 @@ function controllerOptions(config: Config): CliOptions {
   const modelOptions = settings?.modelOptions ?? [{ provider, id: model, name: model }]
   const cwd = config.cwd ?? cfg.cwd ?? process.cwd()
   return {
-    task: undefined,
-    replay: undefined,
-    dryRun: false,
     cwd,
-    jsonrpcBin: undefined,
-    cordis: undefined,
     provider,
     model,
     modelOptions,
-    projectRoot: process.cwd(),
   }
 }
 

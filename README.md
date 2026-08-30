@@ -1,61 +1,44 @@
 # dsh-tui
 
-Independent terminal UI for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness).
+A terminal UI for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness),
+shipped as a Cordis plugin mounted into the official `dsh --profile tui`. It is
+the web profile's shared core minus the browser transport: the same host plane,
+the same agent presets, and the same durable session store — so sessions here
+and in `dsh --profile web` see each other.
 
-An event-driven Ink/React client that speaks the official Harness SDK
-JSON-RPC wire to a runtime subprocess — **not** a plugin, and **not** a fork
-of the community dsh-TUI project (no copied renderer, presets, or ecosystem
-files). Agent Core stays untouched: the TUI consumes structured
-`session.event` / `session.status` notifications and submits `session/prompt`.
+This is **not** a fork of, and does not copy the code of, the community
+`dsh-TUI` (`@deepseek-harness-tui/dsh-tui`). All implementation is our own,
+aligned to the official Harness plugin model (mount a zero-core-change TUI
+plugin onto the official harness and keep the UI thin).
 
-## What Works (phase 1)
-
-- **Chat (R2)** — user/assistant messages with live assistant streaming
-- **Status line (R4)** — idle / working / thinking / tool-running, connection
-  state, model, turn·step
-- **Tool cards (A1)** — structured display of tool calls and results
-  (name, args, lifecycle badge, output), not plain text dumps
-- **Thinking stream (A2)** — live reasoning deltas, collapsible when done
-  (`t` on an empty input line)
-- **Completion (I1)** — Tab completes `/commands` and file paths
-- **Session browser (W1)** — simplified `/sessions` + `/resume [id]`, backed
-  by a UI metadata registry (the runtime owns the durable log)
-- **Model switch (W7)** — `/model`, applies to new sessions (protocol-level
-  `initialize` re-send, no Agent Core change)
-- **Status commands (C1)** — `/status`, `/context`
-- **Script mode** — `dsh-tui "one-shot task"` prints the final reply;
-  `--dry-run` shows the spawn command; `--replay <jsonl>` renders a fixture
-  keylessly (deterministic smoke path)
-
-## Architecture
+## How It Works
 
 ```text
-user terminal
-  -> dsh-tui process                    (TypeScript + Ink, src/)
-  -> spawns dsh-jsonrpc-agent <runtime/cordis.yml>
-  -> NDJSON JSON-RPC over stdio         (official wire, docs/protocol.md)
-  -> session.event / session.status notifications
-  -> src/events/reducer.ts       (pure: notification -> TuiEvent -> state)
-  -> src/state/store.ts          (tiny external store)
-  -> src/ui/*                    (Ink components)
+dsh --profile tui
+  -> dsh-base                              # official host plane (dsh web shares this)
+       session persistence  -> ~/.dsh/sessions   (same store web writes)
+       sandbox + approval, skills/goals registries, model route
+  -> dsh-tui (cordis.patch.yml)            # this package's patch layer
+       mounts agent-presets roster + the dsh-tui front door
+  -> src/plugin.tsx                         # in-process Cordis plugin
+       creates/resumes an Agent via ctx.agents, subscribes to session/event
+  -> src/events/* reducer                   # official event -> TuiEvent -> state
+  -> src/ui/* (Ink components)             # the TUI we own
+  -> terminal
 ```
 
-Runtime owns agent/model/tool/session/durability/credentials; the TUI owns
-rendering, input, session metadata, and model selection. See
-[docs/architecture.md](docs/architecture.md) and [docs/protocol.md](docs/protocol.md).
+The runtime owns agent/model/tool/session/permission/persistence; the TUI owns
+rendering, input, session browsing metadata, and model/preset selection. See
+[AGENTS.md](AGENTS.md) and [docs/architecture.md](docs/architecture.md).
 
 ## Requirements
 
 - Node.js `>=22.19`, pnpm `11.x`
-- Harness runtime packages (installed as devDependencies, `0.1.1-rc.2` line)
-- `$DSH_HOME/settings.yaml` route (e.g. a local provider-router) or
+- The `dsh` CLI (the official DeepSeek Harness app) on `PATH`
+- A model route: `~/.dsh/settings.yaml` (e.g. a local provider-router) or
   `DEEPSEEK_API_KEY` exported for live model calls
 
 ## Install And Run
-
-The canonical client is the **in-process Cordis plugin**: `dsh-tui` boots the
-official dsh profile host plane and loads this package as a plugin inside the
-harness (one command — it auto-creates the profile on first run).
 
 ```sh
 cd ~/Developer/tools/dsh-tui
@@ -65,14 +48,12 @@ pnpm build
 dsh-tui                     # boot the dsh-tui profile (in-process plugin)
 dsh-tui --profile NAME      # boot a specific profile
 dsh-tui --dry-run           # print the boot command, don't run
-dsh-tui "summarize this repo"  # one-shot task
 ```
 
 Under the hood `dsh-tui` runs `dsh --profile <name>`; the first run installs
 THIS package into the profile (`dsh plugin --profile <name> add <this pkg>`).
-The legacy **JSON-RPC subprocess client** is still available at
-`dsh-tui-standalone` (spawns `dsh-jsonrpc-agent`, no approval/permission/sandbox
-switching).
+The default profile is `tui`, so `dsh --profile tui` and `dsh-tui` are the same
+front door.
 
 Development and checks:
 
@@ -86,12 +67,12 @@ pnpm check    # build + keyless smoke (no model, no runtime)
 ### Default config file
 
 A dsh-tui config file (default `~/.config/dsh-tui/config.yaml`, overridable via
-`DSH_TUI_CONFIG`) holds shared defaults for **both** the standalone CLI and the
-in-process plugin. Copy `config.example.yaml` to that path and set the fields
-you want. Resolve chain for provider/model/cwd:
+`DSH_TUI_CONFIG`) holds shared defaults for the plugin. Copy
+`config.example.yaml` to that path and set the fields you want. Resolve chain
+for provider/model/cwd:
 
 ```
-explicit (env / --flag / cordis patch)  >  config file  >  dsh settings  >  built-in default
+explicit (env / plugin config / cordis patch)  >  config file  >  dsh settings  >  built-in default
 ```
 
 ```yaml
@@ -106,13 +87,22 @@ preset: standard
 
 | Option | Env Var | Default | Meaning |
 | --- | --- | --- | --- |
-| `--jsonrpc-bin <path>` | `DSH_TUI_JSONRPC_BIN` | installed `dsh-jsonrpc-agent` | runtime executable (local harness clone as fallback) |
-| `--cordis <path>` | `DSH_TUI_CORDIS` | `runtime/cordis.yml` | runtime composition |
-| `--cwd <dir>` | `DSH_TUI_CWD` | current directory | session workspace for bash/fs |
-| `--model <name>` | `DSH_TUI_MODEL` | first of list | model for new sessions |
-| `--replay <file>` | — | — | keyless fixture render |
-| — | `DSH_TUI_PROVIDER` | `deepseek-official` | provider route for new sessions |
-| — | `DSH_TUI_MODELS` | `deepseek-v4-flash` | comma-separated switchable models |
+| `--profile <name>` | `DSH_TUI_PROFILE` | `tui` | profile to boot |
+| — | `DSH_TUI_PROVIDER` | settings default | provider route for new sessions |
+| — | `DSH_TUI_MODEL` | settings default | model for new sessions |
+| — | `DSH_TUI_MODELS` | settings list | comma-separated switchable models |
+| — | `DSH_TUI_PRESET` | `standard` | agent preset for new sessions |
+| — | `DSH_TUI_RESUME_SESSION` | — | session id to resume on boot |
+| — | `DSH_TUI_CWD` | config `cwd` / `process.cwd()` | session workspace |
+| — | `DSH_TUI_PERSONA` | `You are a coding agent.` | deployment persona |
+
+## Sharing Sessions With Web
+
+Both `dsh --profile web` and `dsh --profile tui` compose the same base row
+`session-persistence-jsonl` rooted at `dshHomePath('sessions')`
+(`~/.dsh/sessions`), so `/resume` here and the web session list read the same
+durable logs. The profile patch re-points the root only when
+`DSH_TUI_SESSION_ROOT` is set (test isolation).
 
 ## Commands inside the TUI
 
@@ -120,23 +110,12 @@ preset: standard
 `/permission [mode]` `/preset [name]` `/commands` `/clear` `/exit` — plus
 `↑/↓` history, `Tab` completion, `t` thinking toggle.
 
-`/permission` (no arg) opens a picker for the three DSH sandbox levels
-(`read-only` / `workspace-write` / `danger-full-access`); `/permission <mode>`
-switches directly. Full access also turns the approval policy off (`never`), the
-others stay `ask`. The footer badge (`ro`/`ws`/`full`) shows the live level.
-`/preset` picks the agent preset (`standard`/`code`/`minimal`/`cordis`) for new
-sessions — the choice is passed to the agent factory (`meta.agentPreset`) and
-mounted through the agent-presets roster (`ctx.agentPresets.mount`), so it
-changes the tool world (the host tool rows are disabled and the preset owns the
-tools, like the web profile).
-
-Known `/` commands not handled by the TUI (e.g. `/plan`, `/goal`) are routed to
-the harness command registry, so they execute without a model round-trip. A
-single-word `/foo` that resolves to neither the TUI nor a harness command is
-reported as unknown; a path like `/a/b` is submitted as text.
-
-## Deliberately out of scope (phase 1)
-
-Clipboard, mouse, splash/logo animation, custom renderer, Yoga/layout engine,
-full themes and i18n, rewind/fork, plugin system, subagent dashboard,
-trajectory viewer, VS Code integration, self-update.
+- `/permission` (no arg) opens a picker for the three DSH sandbox levels
+  (`read-only` / `workspace-write` / `danger-full-access`); full access also
+  turns the approval policy off (`never`), the others stay `ask`.
+- `/preset` picks the agent preset (`standard`/`code`/`minimal`/`cordis`) for
+  new sessions — mounted through the agent-presets roster
+  (`ctx.agentPresets.mount`), so it changes the tool world (the host tool rows
+  are disabled and the preset owns the tools, like the web profile).
+- Known `/` commands not handled by the TUI (e.g. `/plan`, `/goal`) are routed
+  to the harness command registry, so they execute without a model round-trip.

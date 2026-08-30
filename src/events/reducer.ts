@@ -23,7 +23,7 @@ export interface TuiState {
   step: number
   todos: TodoItem[]
   items: ChatItem[]
-  /** Last standalone-error message (cleared on the next user submit). */
+  /** Last error message (cleared on the next user submit). */
   error: string
   /** Transient notice, e.g. "model switched". */
   notice: string

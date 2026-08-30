@@ -1,9 +1,8 @@
 # dsh-tui default config.
 #
 # Copy this to `~/.config/dsh-tui/config.yaml` (or point DSH_TUI_CONFIG
-# elsewhere). It is read by BOTH the standalone CLI (`dsh-tui`) and the
-# in-process plugin (`dsh --profile <name>`); an explicit env / `--patch` flag
-# always wins over these values.
+# elsewhere). It is read by the in-process plugin (`dsh --profile tui`); an
+# explicit env / plugin-config / `--patch` flag always wins over these values.
 #
 # Missing or malformed file → dsh-tui falls back to the dsh settings default
 # (`~/.dsh/settings.yaml`), then the built-in DeepSeek fallback.

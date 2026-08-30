@@ -1,94 +1,97 @@
 # Architecture
 
-`dsh-tui` is an independent terminal UI for DeepSeek Harness. It is a
-**protocol client**, not a plugin: the TUI runs in its own process and speaks
-the official Harness SDK JSON-RPC wire protocol to a Harness runtime
-subprocess. Agent Core is never modified to fit the UI.
+`dsh-tui` is a terminal UI for DeepSeek Harness shipped as an in-process Cordis
+plugin. It mounts onto the official `dsh --profile tui` host plane
+(`dsh-base`) and composes the same agent world as the web profile, minus the
+browser transport. Agent Core is never modified to fit the UI.
 
 ## Boundary
 
 ```text
-user terminal
-  -> dsh-tui process (TypeScript + Ink)
-       src/harness/client.ts  ── spawns the runtime subprocess ──>
-       [ dsh-jsonrpc-agent <runtime/cordis.yml> ]
-       NDJSON JSON-RPC over stdio (official @deepseek-ai/dsh-sdk-protocol wire)
-       <-- notifications -- <events/status>
-  -> src/events/reducer.ts  (pure: notification -> TuiEvent -> state)
-  -> src/state/store.ts     (tiny external store, useSyncExternalStore)
-  -> src/ui/*               (Ink components render state, dispatch input)
+dsh --profile tui
+  -> dsh-base (host plane)             session persistence, sandbox + approval,
+                                       skills/goals registries, model route
+  -> cordis.patch.yml (this package)   agent-presets roster + the dsh-tui row
+  -> src/plugin.tsx  apply(ctx, config)
+       ctx.agents.create/resume        official agent factory (in-process)
+       ctx.on('session/event', ...)    official event feed
+  -> src/events/reducer.ts             pure: SessionEvent -> TuiEvent -> state
+  -> src/state/store.ts                tiny external store (useSyncExternalStore)
+  -> src/ui/*                          Ink components render state, dispatch input
 ```
 
-The runtime process owns: agent loop, model calls, tool execution, session
-durability, credentials, permissions, compaction. The TUI owns: rendering,
-user input, session browsing metadata, model selection, command handling.
+The harness owns agent loop, model calls, tool execution, session durability,
+credentials, permissions, compaction, and subagent delegation. The TUI owns
+rendering, user input, session browsing metadata, and model/preset selection.
 
-## Why the JSON-RPC runtime and not `dsh --profile headless`
+## Shared sessions with web
 
-The headless command boundary (previous MVP) prints finished assistant text to
-stdout. A real TUI needs a **structured, streaming event stream**: token
-deltas, reasoning deltas, tool lifecycles, and agent status transitions. The
-official out-of-process seam for exactly that is `dsh-sdk-jsonrpc-server`,
-which emits `session.event` / `session.status` notifications and accepts
-`initialize` / `session/prompt` / `shutdown` requests (see
-[docs/protocol.md](protocol.md)). Adopting it keeps the old,
-unstructured-string boundary out of the design.
+The base row `session-persistence-jsonl` is rooted at `dshHomePath('sessions')`
+(`~/.dsh/sessions`) for every profile, so `dsh --profile tui` and
+`dsh --profile web` write and read the same durable JSONL logs. The plugin's
+session browser (`/sessions` + `/resume`) walks that store
+(`src/plugin.tsx` → `listPersistedSessions`), decompressing each log to recover
+titles, and resumes through the official agent factory (`ctx.agents.resume`).
+`DSH_TUI_SESSION_ROOT` re-points the root for test isolation only.
 
 ## Event interface (minimal, by explicit design)
 
-`src/events/types.ts` defines the only vocabulary the UI understands. It is
-deliberately smaller than `SessionEventMap`; the reducer maps only what the UI
-consumes. Everything else is dropped.
+`src/events/types.ts` defines the only vocabulary the UI understands. The
+plugin projects official `SessionEvent`s through `eventsFor`; the reducer maps
+only what the UI consumes and drops the rest. `tuiEventsFromNotification`
+adapts fixture frames for the keyless replay path (`scripts/smoke.mjs`).
 
 | TuiEvent | Source session-event(s) | Purpose |
 | --- | --- | --- |
-| `status` (+connection) | `session.status`, `turn/start/end`, `step/start/end`, `tool/*` | R4 status line |
-| `user-message` | `user/message` with `source.kind === 'user'` | R2 chat |
-| `assistant-delta` / `thinking-delta` | `assistant/chunk` (`text-delta` / `reasoning-delta`) | R2 streaming, A2 |
-| `assistant-message` | `assistant/message` (finalized; usage, interrupted) | R2 finalize |
-| `tool-start` / `tool-output` / `tool-finish` | `tool/call` / `tool/result` | A1 tool cards |
-| `title` / `todos` / `context` | `session/title` / `todo/write` / `request/context` | W1, C1 |
+| `status` (+connection) | `session.status`, `turn/start/end`, `step/start/end`, `tool/*` | status line |
+| `user-message` | `user/message` with `source.kind === 'user'` | chat |
+| `assistant-delta` / `thinking-delta` | `assistant/chunk` (`text-delta` / `reasoning-delta`) | streaming |
+| `assistant-message` | `assistant/message` (finalized; usage, interrupted) | finalize |
+| `tool-start` / `tool-finish` | `tool/call` / `tool/result` | tool cards |
+| `title` / `todos` / `context` | `session/title` / `todo/write` / `request/context` | session browser, status |
 
 ## Data flow
 
-1. `cli.ts` parses args, loads config, creates the store.
-2. `client.ts` spawns the runtime and performs `initialize`.
-3. Every notification is buffered and pushed through `wire→TuiEvent`
-   mapping; the reducer applies events to state in order.
-4. Ink components subscribe to the store (`useSyncExternalStore`) and render.
-5. Input submission: `/`-commands dispatch locally (or restart the runtime for
-   `/model`); plain text goes out as `session/prompt` and returns as events.
+1. `bin/dsh-tui.js` ensures the profile points at this package, then runs
+   `dsh --profile tui`.
+2. The profile composes `dsh-base` + this package's `cordis.patch.yml`
+   (agent-presets roster default `standard`, the 23 host tool rows the web
+   profile also disables, and the `dsh-tui` front door).
+3. `src/plugin.tsx` `apply` builds the controller, creates/resumes an agent
+   through `ctx.agents`, subscribes to `session/event`, and renders the Ink
+   tree.
+4. Every official session event is projected through `eventsFor` and the
+   reducer into the store; Ink components subscribe via `useSyncExternalStore`.
+5. Input submission: `/`-commands dispatch through `src/commandRunner.ts`
+   (model/preset/permission switches, session resume, harness commands);
+   plain text goes out as `agent.followup(createUserMessage(...))` and returns
+   as session events.
 
-`--replay <file>` feeds a fixture notification JSONL through the same pipeline
-with no runtime process and prints a plain-text render — the keyless smoke
-path that exercises reducer + components deterministically.
+`scripts/smoke.mjs` feeds notification fixtures through the replay pipeline
+with no runtime process and prints a plain-text render — the keyless smoke path
+that exercises reducer + components deterministically.
 
-## Provisioning
+## Agent-plane parity with web
 
-- **Runtime executable** (`src/runtime/resolve.ts`): `DSH_TUI_JSONRPC_BIN` →
-  `dsh-jsonrpc-agent` on PATH → the local DeepSeek Harness checkout's built
-  `dsh-sdk-jsonrpc-demo` bin (dev convenience, documented).
-- **Composition** (`runtime/cordis.yml`): dsh-tui's own plugin tree. Bare
-  `@deepseek-ai/*` names resolve from this project's `node_modules`
-  (devDependencies pinned to the harness `0.1.1-rc.2` line).
-- **Credentials**: the composition mounts the same rows as the official
-  `dsh-base` bundle — `settings` + `credentials` + `llm-pi-ai` — so an
-  existing `$DSH_HOME/settings.yaml` (e.g. a local provider-router route)
-  works unchanged. `llm-deepseek` with `DEEPSEEK_API_KEY` remains the
-  fallback for official-API use. No secret value ever enters dsh-tui source.
+`cordis.patch.yml` disables the same 23 host rows the web-app bundle disables
+(`tool-bash`/`tool-pwsh`/`tool-jobs`/`tool-fs`/`tool-fs-search`/
+`tool-str-replace-editor`/`skill-filesystem`/`tool-skill`/`tool-goal`/
+`plan-mode`/`compaction-basic`/`command-compact`/`tool-result-pruner`/
+`tool-subagent-*`/`workflow-worker-thread`/`tool-workflow`/`tool-ralph`/
+`agent-instructions`/`tool-todo`/`tool-web`) and mounts the same
+`agent-presets` roster (default `standard`). A tui session therefore composes
+the same tool world as a web standard-preset session.
 
-## Session browsing & model switch (W1/W7)
+## Adapter boundary
 
-- The TUI keeps its own small session registry
-  (`~/.local/share/dsh-tui/sessions.json`) as UI metadata: id, title, created/
-  updated timestamps, message count. The runtime stays the authority on the
-  durable log; resuming sends `session/prompt` with the stored session id.
-- Model switch re-sends `initialize` with the new model. The server applies it
-  to subsequently created sessions; existing sessions keep their model. This
-  needs no Agent Core change.
+All imports of official `@deepseek-ai/*` packages are confined to
+`src/official.ts` (see AGENTS.md → Adapter boundary). `src/ui/*` and
+`src/plugin.tsx` reach official types and services only through that facade.
 
 ## Deliberately out of scope (phase 1)
 
 Clipboard, mouse interaction, splash/logo animation, custom renderer,
 Yoga/layout engine, full theme and i18n systems, rewind/fork, plugin system,
-subagent dashboard, trajectory viewer, VS Code integration, self-update.
+subagent dashboard, trajectory viewer, VS Code integration, self-update, and
+the web-only surfaces (session content search, workspace, background-jobs list,
+`@`-reference picker).

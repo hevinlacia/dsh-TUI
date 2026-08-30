@@ -72,7 +72,7 @@ const SPRITE_COLOR: Record<string, string> = {
  * Consecutive cells sharing a style are run-length packed per cell anyway
  * (ink re-renders SGR per <Text>); we group by (fg,bg) to minimise nodes.
  */
-type Cell = { text: string; fg: string; bg: string | undefined }
+type Cell = { text: string; fg: string | undefined; bg: string | undefined }
 
 function spriteRows(): Cell[][] {
   const rows: Cell[][] = []
@@ -85,7 +85,13 @@ function spriteRows(): Cell[][] {
       const lo = SPRITE_COLOR[lower[x]!]
       const fg = up ?? lo
       const bg = up && lo ? lo : undefined
-      if (fg === undefined) continue
+
+      // Keep transparent cells so each row remains aligned to the source grid.
+      if (fg === undefined) {
+        line.push({ text: ' ', fg: undefined, bg: undefined })
+        continue
+      }
+
       const text = up && lo ? '▀' : up ? '▀' : '▄'
       line.push({ text, fg, bg })
     }
