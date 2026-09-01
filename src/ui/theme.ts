@@ -23,12 +23,8 @@ export const palette = {
   thinkingText: 'gray',
   toolName: 'yellowBright',
   toolOk: 'greenBright',
-  toolError: 'redBright',
   toolRun: 'magentaBright',
-  statusBar: '#101722',
-  statusBarBorder: '#2a3750',
-  statusText: 'gray',
-  statusAccent: 'blueBright',
+  warning: 'yellowBright',
   ok: 'greenBright',
   error: 'redBright',
   spinner: 'cyanBright',
@@ -51,9 +47,3 @@ export const palette = {
 } as const
 
 export type PaletteColor = (typeof palette)[keyof typeof palette]
-
-/** Short human labels for the footer. */
-export const labels = {
-  free: 'free',
-  shortcuts: '? for shortcuts',
-} as const

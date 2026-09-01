@@ -1,16 +1,26 @@
 /**
- * R4 — rich single-line status footer: left (model·effort·tokens), middle
- * (phase/tools/elapsed + context usage), right (git · project · session).
+ * Pi-style footer under the input: two dim lines.
+ *
+ *   ~/Developer (main) • session title
+ *   ↑1.2k ↓300 12.3%/200k          (provider) model • effort
+ *
+ * Line 1 is the working directory (home collapsed to `~`) plus the git
+ * branch and session title. Line 2 puts cumulative token counters and the
+ * context usage on the left, and the `(provider) model` identity on the
+ * right, right-aligned with a two-column gutter; the context percentage
+ * turns warning/error colored as the window fills (>70% / >90%), mirroring
+ * pi. A third line appears only while there is transient activity
+ * (connecting / disconnected / mid-turn / delegated subagents).
  * @module dsh-tui/ui/StatusBar
  */
 
 import type { JSX } from 'react'
-import { Box, Text } from 'ink'
-import { basename } from 'node:path'
+import { Box, Text, useStdout } from 'ink'
+import stringWidth from 'string-width'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { TuiState } from '../events/reducer.js'
 import { elapsedSeconds, useNow } from './useNow.js'
-import { palette, labels } from './theme.js'
-import type { PermissionMode } from '../permission.js'
+import { palette } from './theme.js'
 
 const PHASE_LABEL: Record<TuiState['phase'], string> = {
   idle: 'idle',
@@ -20,59 +30,139 @@ const PHASE_LABEL: Record<TuiState['phase'], string> = {
   error: 'error',
 }
 
-const CONNECTION_DOT: Record<TuiState['connection'], string> = {
+const CONNECTION_MARK: Record<TuiState['connection'], string> = {
   connecting: '◌',
   connected: '●',
   disconnected: '✗',
 }
 
-/** Compact token count (k/M). */
-function compactTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return `${n}`
+const CONNECTION_COLOR: Record<TuiState['connection'], string> = {
+  connecting: palette.warning,
+  connected: palette.ok,
+  disconnected: palette.error,
 }
 
-/** Compact permission tag + color for the footer. */
-const PERM_TAG: Record<PermissionMode, { tag: string; title: string; color: string }> = {
-  'read-only': { tag: 'ro', title: 'read-only', color: palette.toolError },
-  'workspace-write': { tag: 'ws', title: 'workspace-write', color: palette.ok },
-  'danger-full-access': { tag: 'full', title: 'danger-full-access', color: palette.toolName },
+/** Compact token count in pi's footer style (1.0M, 128k, 9.5k, 832). */
+function formatTokens(count: number): string {
+  if (count < 1000) return `${count}`
+  if (count < 10000) return `${(count / 1000).toFixed(1)}k`
+  if (count < 1000000) return `${Math.round(count / 1000)}k`
+  if (count < 10000000) return `${(count / 1000000).toFixed(1)}M`
+  return `${Math.round(count / 1000000)}M`
 }
 
-/** The whole footer as one line. */
+/** Collapse the home directory prefix to `~` (pi's footer cwd format). */
+function formatCwdForFooter(cwd: string, home: string | undefined): string {
+  if (home === undefined || home === '') return cwd
+  const resolvedCwd = resolve(cwd)
+  const resolvedHome = resolve(home)
+  const relativeToHome = relative(resolvedHome, resolvedCwd)
+  const isInsideHome =
+    relativeToHome === ''
+    || (relativeToHome !== '..' && !relativeToHome.startsWith(`..${sep}`) && !isAbsolute(relativeToHome))
+  if (!isInsideHome) return cwd
+  return relativeToHome === '' ? '~' : `~${sep}${relativeToHome}`
+}
+
+/** Cut `text` to `maxWidth` display columns, appending `suffix` when cut. */
+function truncateToWidth(text: string, maxWidth: number, suffix = ''): string {
+  if (maxWidth <= 0) return ''
+  if (stringWidth(text) <= maxWidth) return text
+  const suffixWidth = stringWidth(suffix)
+  let width = 0
+  let out = ''
+  for (const ch of text) {
+    const w = stringWidth(ch)
+    if (width + w > maxWidth - suffixWidth) break
+    out += ch
+    width += w
+  }
+  return out + suffix
+}
+
+/** One colored segment of the stats line: plain text plus an optional color. */
+interface StatChunk {
+  text: string
+  color?: string
+}
+
+/** Pi-style dim footer: cwd/branch line, stats + model line, activity line. */
 export function StatusBar(props: { state: TuiState; cwd: string; gitBranch: string }): JSX.Element {
   const { state, cwd, gitBranch } = props
   const now = useNow(1000)
-  const project = basename(cwd)
-  const perm = PERM_TAG[state.permission] ?? { tag: state.permission, title: state.permission, color: palette.statusText }
+  const { stdout } = useStdout()
+  const width = Math.max(1, stdout?.columns ?? 80)
+
+  // Line 1 — `~cwd (branch)` + session title, like pi's footer head.
+  let pwdLine = formatCwdForFooter(cwd, process.env.HOME ?? process.env.USERPROFILE)
+  if (gitBranch !== '') pwdLine = `${pwdLine} (${gitBranch})`
+  if (state.title !== '') pwdLine = `${pwdLine} • ${state.title}`
+  pwdLine = truncateToWidth(pwdLine, width, '...')
+
+  // Line 2 left — cumulative token counters (only when non-zero) + context usage.
   const elapsed = state.turnStartedAt > 0 ? elapsedSeconds(state.turnStartedAt, now) : 0
-  const contextUsed = state.tokens.input
-  const contextPct = state.contextWindow > 0 ? `${(contextUsed / state.contextWindow * 100).toFixed(1)}%` : '–'
-  const contextRemaining = state.contextWindow > 0 ? ` ${compactTokens(state.contextWindow - contextUsed)}` : ''
-  const shortId = state.sessionId.length > 14 ? state.sessionId.slice(0, 14) : state.sessionId
-  const model = state.model === '' ? 'model' : state.model
-  const effort = state.effort === '' ? '' : ` · ${state.effort}`
-  const phase = PHASE_LABEL[state.phase]
-  const tokensOut = `↗${compactTokens(state.tokens.output)}`
-  const tools = state.activeToolCount > 0 ? `${state.activeToolCount} 工具` : '0 工具'
+  const statsChunks: StatChunk[] = []
+  if (state.tokens.input > 0) statsChunks.push({ text: `↑${formatTokens(state.tokens.input)}` })
+  if (state.tokens.output > 0) statsChunks.push({ text: `↓${formatTokens(state.tokens.output)}` })
+  const contextPct = state.contextWindow > 0 ? (state.tokens.input / state.contextWindow) * 100 : null
+  const contextDisplay =
+    contextPct === null ? '?' : `${contextPct.toFixed(1)}%/${formatTokens(state.contextWindow)}`
+  statsChunks.push({
+    text: contextDisplay,
+    color: contextPct !== null && contextPct > 90 ? palette.error : contextPct !== null && contextPct > 70 ? palette.warning : undefined,
+  })
+
+  // Line 2 right — `(provider) model`, plus the effort level like pi's thinking indicator.
+  const modelName = state.model === '' ? 'no-model' : state.model
+  let modelLine = state.provider === '' ? modelName : `(${state.provider}) ${modelName}`
+  if (state.effort !== '') modelLine = `${modelLine} • ${state.effort}`
+  modelLine = truncateToWidth(modelLine, width)
+  const modelWidth = stringWidth(modelLine)
+
+  // Fit left + gutter(2) + right into the terminal width; truncate the left
+  // chunks first, then pad so the model stays right-aligned.
+  const availableForStats = modelLine === '' ? width : width - modelWidth - 2
+  const rendered: StatChunk[] = []
+  let usedWidth = 0
+  for (const chunk of statsChunks) {
+    const gap = rendered.length > 0 ? 1 : 0
+    const budget = availableForStats - usedWidth - gap
+    if (budget <= 0) break
+    const text = truncateToWidth(chunk.text, budget)
+    if (text === '') break
+    rendered.push({ text, color: chunk.color })
+    usedWidth += gap + stringWidth(text)
+  }
+  const gutter = ' '.repeat(Math.max(0, width - usedWidth - modelWidth))
+
+  // Line 3 — transient activity only; hidden when idle so the footer matches pi.
+  // The connection mark renders separately so it can carry its own color.
+  const activity: string[] = []
+  if (state.connection !== 'connected') activity.push(state.connection)
+  if (state.phase !== 'idle') activity.push(PHASE_LABEL[state.phase])
+  if (state.activeToolCount > 0) activity.push(`${state.activeToolCount} 工具`)
+  if (elapsed > 0) activity.push(`${elapsed}s`)
+  if (state.subagents.length > 0) activity.push(`${state.subagents.length} 子代理`)
 
   return (
-    <Box borderStyle="single" borderColor={palette.statusBarBorder} paddingX={1} flexDirection="row">
+    <Box flexDirection="column">
+      <Text dimColor wrap="truncate">{pwdLine}</Text>
       <Text wrap="truncate">
-        <Text color={CONNECTION_DOT[state.connection] === '✗' ? palette.error : palette.ok}>{CONNECTION_DOT[state.connection]}</Text>
-        <Text bold color={palette.statusAccent}> spot</Text>
-        <Text color={palette.accent}>{` ${model}${effort} · ${tokensOut}`}</Text>
-        <Text dimColor>{` · ${phase}`}</Text>
-        <Text dimColor>{` · ${tools}`}</Text>
-        <Text color={perm.color}>{` · ${perm.tag}`}</Text>
-        {state.subagents.length > 0 && <Text color={palette.toolRun}>{` · ${state.subagents.length} 子代理`}</Text>}
-        <Text dimColor>{elapsed > 0 ? ` · ${elapsed}s` : ''}</Text>
-        <Text color={palette.accent} dimColor>{` · ctx ${compactTokens(contextUsed)}/${state.contextWindow > 0 ? compactTokens(state.contextWindow) : '–'} ${contextPct}${contextRemaining}`}</Text>
-        <Text dimColor>
-          {` · ${gitBranch !== '' ? gitBranch : '—'} · ${project} · ${shortId} · ${labels.shortcuts}`}
-        </Text>
+        {rendered.map((chunk, index) => (
+          <Text key={index} dimColor={chunk.color === undefined} color={chunk.color}>
+            {index === 0 ? chunk.text : ` ${chunk.text}`}
+          </Text>
+        ))}
+        <Text dimColor>{`${gutter}${modelLine}`}</Text>
       </Text>
+      {activity.length > 0 && (
+        <Text dimColor wrap="truncate">
+          <Text color={state.connection === 'connected' ? undefined : CONNECTION_COLOR[state.connection]}>
+            {state.connection === 'connected' ? '' : `${CONNECTION_MARK[state.connection]} `}
+          </Text>
+          {activity.join(' · ')}
+        </Text>
+      )}
     </Box>
   )
 }
