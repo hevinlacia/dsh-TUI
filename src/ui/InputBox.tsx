@@ -1,6 +1,7 @@
 /**
- * I1 — input box: a Claude-Code-style prompt framed by two horizontal rules,
- * with history (↑/↓ single-line, Ctrl+P/Ctrl+N always), Tab completion for
+ * I1 — input box: a pi-style editor framed by two horizontal rules — no prompt
+ * prefix, text starting at column 0, reverse-video block cursor — with history
+ * (↑/↓ single-line, Ctrl+P/Ctrl+N always), Tab completion for
  * slash commands and file paths, a live slash-command dropdown that narrows as
  * you type, and a second-level option submenu for commands that take a choice
  * (e.g. `/model`).
@@ -203,9 +204,10 @@ export function InputBox(props: {
   }
 
   const ruleWidth = Math.max(0, stdout?.columns ?? 80)
-  // The value `<Text>` content width: terminal columns minus 1 col of paddingX
-  // each side and the `> `/`/ ` prompt (2 cols).
-  const valueWidth = Math.max(1, ruleWidth - 4)
+  // The value `<Text>` content width: terminal columns minus the 1 col the
+  // trailing cursor block can claim on a full line (pi reserves the same col
+  // when the editor has no padding).
+  const valueWidth = Math.max(1, ruleWidth - 1)
 
   useInput((input, key) => {
     if (modalOpen) return // modals own the keyboard while open
@@ -400,17 +402,13 @@ export function InputBox(props: {
     }
   })
 
-  const inCommand = value.trim().startsWith('/')
   return (
-    <Box flexDirection="column" paddingBottom={1}>
+    <Box flexDirection="column">
       {submenu !== null && submenuBase !== null
         ? <ModelSubmenu entries={submenu} currentModel={currentModel} selected={selected} />
         : showCommandMenu && <CommandMenu matches={matches} selected={selected} />}
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
-      <Box paddingX={1}>
-        <Text color={inCommand ? palette.commandName : 'cyan'}>{inCommand ? '/ ' : '> '}</Text>
-        <Text>{value.slice(0, cursor)}<Text inverse>{cursor < value.length && value[cursor] !== '\n' ? value[cursor] : ' '}</Text>{value.slice(cursor + 1)}</Text>
-      </Box>
+      <Text>{value.slice(0, cursor)}<Text inverse>{cursor < value.length && value[cursor] !== '\n' ? value[cursor] : ' '}</Text>{value.slice(cursor + 1)}</Text>
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
     </Box>
   )

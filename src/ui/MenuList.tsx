@@ -21,7 +21,7 @@ export function MenuList(props: { rows: MenuRow[]; selected: number }): JSX.Elem
   const { rows, selected } = props
   const sel = Math.min(Math.max(selected, 0), rows.length - 1)
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <Box flexDirection="column">
       {rows.map((row, index) => {
         const isSel = index === sel
         return (
