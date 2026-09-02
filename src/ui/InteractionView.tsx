@@ -94,7 +94,7 @@ export function InteractionView(props: { interaction: PendingInteraction; contro
   })
 
   return (
-    <Box flexDirection="column" paddingX={1} paddingY={1} borderStyle="round" borderColor={palette.accent}>
+    <Box flexDirection="column" paddingLeft={1}>
       {interaction.kind === 'approval'
         ? renderApproval(interaction)
         : renderQuestion(interaction, selected, multi, text)}
