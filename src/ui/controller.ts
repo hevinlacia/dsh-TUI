@@ -10,7 +10,7 @@ import type { TuiState } from '../events/reducer.js'
 import type { Store } from '../state/store.js'
 import type { SessionMeta } from '../sessions.js'
 import type { PermissionMode } from '../permission.js'
-import type { AgentPreset } from '../presets.js'
+import type { PresetInfo } from '../presets.js'
 
 /** The UI-facing decision for a pending model interaction (approval/question). */
 export type InteractionDecision =
@@ -37,9 +37,13 @@ export interface TuiController {
   /** Switch the permission level (sandbox + approval policy). */
   setPermissionMode(mode: PermissionMode): Promise<void>
   /** The compose default agent preset. */
-  currentPreset(): AgentPreset
+  currentPreset(): string
   /** Switch the agent preset used to compose new sessions. */
-  setAgentPreset(preset: AgentPreset): Promise<void>
+  setAgentPreset(preset: string): Promise<void>
+  /** Live preset roster (shipped + user presets, re-read per call). */
+  listPresets(): Promise<readonly PresetInfo[]>
+  /** Last roster snapshot (sync, for completion data); shipped fallback. */
+  cachedPresets(): readonly PresetInfo[]
   /** Harness-registered commands discoverable for `/commands` (empty offline). */
   listHarnessCommands(): Promise<Array<{ name: string; description: string }>>
   /** Resolve the pending model-facing interaction (approval/question). */

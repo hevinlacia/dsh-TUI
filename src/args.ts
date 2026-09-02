@@ -9,7 +9,7 @@
 import type { CliOptions } from './config.js'
 import type { ArgumentCandidate } from './completion.js'
 import { PERMISSION_LEVELS } from './permission.js'
-import { AGENT_PRESETS } from './presets.js'
+import type { PresetInfo } from './presets.js'
 import type { SessionMeta } from './sessions.js'
 
 /** `/model` — the switchable models, `provider · name` rows with a current marker. */
@@ -26,9 +26,9 @@ export function permissionArgumentEntries(): ArgumentCandidate[] {
   return PERMISSION_LEVELS.map(level => ({ label: level.label, meta: level.description, value: level.label }))
 }
 
-/** `/preset` — the official agent presets. */
-export function presetArgumentEntries(): ArgumentCandidate[] {
-  return AGENT_PRESETS.map(preset => ({ label: preset, value: preset }))
+/** `/preset` — the live roster (user presets included). */
+export function presetArgumentEntries(presets: readonly PresetInfo[]): ArgumentCandidate[] {
+  return presets.map(preset => ({ label: preset.id, meta: preset.description, value: preset.id }))
 }
 
 /** `/resume` — persisted sessions (title rows carrying the resume id). */

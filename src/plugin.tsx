@@ -41,7 +41,7 @@ import {
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
 import { loadLastModel, saveLastModel } from './lastModel.js'
 import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, type PermissionMode } from './permission.js'
-import { DEFAULT_AGENT_PRESET, isAgentPreset, presetLabel, type AgentPreset } from './presets.js'
+import { DEFAULT_AGENT_PRESET, SHIPPED_AGENT_PRESETS, type PresetInfo } from './presets.js'
 import { parseInput } from './commands.js'
 import { runCommand, type CommandHost, type ModalKind } from './commandRunner.js'
 import { reduce, initialState, type TuiState } from './events/reducer.js'
@@ -121,7 +121,9 @@ class InProcessController implements TuiController, CommandHost {
   private readonly currentId: { current: string }
   private defaultProvider: string
   private defaultModel: string
-  private defaultPreset: AgentPreset
+  private defaultPreset: string
+  /** Last agent-presets roster snapshot (shipped four until the first list). */
+  private presetsCache: readonly PresetInfo[] | undefined
   /** Monotonic id for pending model-facing interactions (approval/question). */
   private interactionSeq = 0
   /** Pending interaction resolvers, keyed by seq (the agent blocks one at a time). */
@@ -135,7 +137,7 @@ class InProcessController implements TuiController, CommandHost {
     hooks: ControllerHooks,
     defaultProvider: string,
     defaultModel: string,
-    defaultPreset: AgentPreset,
+    defaultPreset: string,
   ) {
     this.options = options
     this.store = store
@@ -240,14 +242,35 @@ class InProcessController implements TuiController, CommandHost {
   }
 
   /** The compose default agent preset. */
-  currentPreset(): AgentPreset {
+  currentPreset(): string {
     return this.defaultPreset
   }
 
   /** Switch the agent preset used to compose new sessions (applies on /new). */
-  async setAgentPreset(preset: AgentPreset): Promise<void> {
+  async setAgentPreset(preset: string): Promise<void> {
     this.defaultPreset = preset
-    this.apply({ type: 'notice', message: `preset → ${presetLabel(preset)} (new sessions; /new to start one)` })
+    this.apply({ type: 'notice', message: `preset → ${preset} (new sessions; /new to start one)` })
+  }
+
+  /** Live preset roster: shipped + user presets (`~/.dsh/.agent-presets`),
+   * re-read by the roster on every call. Falls back to the shipped four when
+   * the roster service is unavailable. */
+  async listPresets(): Promise<readonly PresetInfo[]> {
+    try {
+      const roster = await this.ctx.agentPresets?.list()
+      if (roster !== undefined && roster.length > 0) {
+        this.presetsCache = roster.map(preset => ({ id: preset.id, description: preset.description }))
+        return this.presetsCache
+      }
+    } catch {
+      // fail-open: fall back to the shipped list below
+    }
+    return this.cachedPresets()
+  }
+
+  /** Last roster snapshot (sync, for completion data); shipped fallback. */
+  cachedPresets(): readonly PresetInfo[] {
+    return this.presetsCache ?? SHIPPED_AGENT_PRESETS
   }
 
   /** Harness-registered commands (plan, goal, compact, …) for `/commands`. */
@@ -600,10 +623,11 @@ function subId(identity: unknown): string {
   return ''
 }
 
-/** Resolve the effective agent preset: plugin config → config file → default. */
-function resolveDefaultPreset(config: Config): AgentPreset {
-  const preset = config.preset ?? loadTuiConfigFile().preset
-  return isAgentPreset(preset ?? '') ? (preset as AgentPreset) : DEFAULT_AGENT_PRESET
+/** Resolve the effective agent preset: plugin config → config file → default.
+ * Membership is NOT checked here — a preset id is an opaque string and the
+ * roster mount reports unknown ids visibly at session creation. */
+function resolveDefaultPreset(config: Config): string {
+  return config.preset ?? loadTuiConfigFile().preset ?? DEFAULT_AGENT_PRESET
 }
 
 /** Build the controller's CliOptions from plugin config → config file → last-used memory → dsh settings. */
