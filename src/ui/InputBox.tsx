@@ -38,6 +38,7 @@ import {
   presetArgumentEntries,
   sessionArgumentEntries,
 } from '../args.js'
+import type { PresetInfo } from '../presets.js'
 import { palette } from './theme.js'
 import { CommandMenu } from './CommandMenu.js'
 
@@ -185,8 +186,10 @@ export function InputBox(props: {
   running: boolean
   /** Called (only when idle typing) to toggle thinking blocks — A2. */
   onToggleThinking: () => void
+  /** Live preset roster — feeds `/preset ` argument completion. */
+  presets: readonly PresetInfo[]
 }): JSX.Element {
-  const { controller, modalOpen, currentModel, running, onToggleThinking } = props
+  const { controller, modalOpen, currentModel, running, onToggleThinking, presets } = props
   const [value, setValue] = useState('')
   const [cursor, setCursor] = useState(0)
   const [selected, setSelected] = useState(0)
@@ -197,19 +200,20 @@ export function InputBox(props: {
   // The session walk is too costly per keystroke: list once, cache.
   const sessionsRef = useRef<ArgumentCandidate[] | null>(null)
 
-  // Injectable argument data for the completion engine. Rebuilt only when the
-  // model actually changes (the "(current)" marker lives in the model rows).
+  // Injectable argument data for the completion engine. Rebuilt when the
+  // model or the preset roster changes (the "(current)" marker lives in the
+  // model rows; the preset candidates carry descriptions from the roster).
   const completionData = useMemo<CompletionData>(() => ({
     models: modelArgumentEntries(controller.options, currentModel),
     permissions: permissionArgumentEntries(),
-    presets: presetArgumentEntries(),
+    presets: presetArgumentEntries(presets),
     sessions: () => {
       if (sessionsRef.current === null) {
         sessionsRef.current = sessionArgumentEntries(controller.sessions())
       }
       return sessionsRef.current
     },
-  }), [controller, currentModel])
+  }), [controller, currentModel, presets])
 
   const result: CompletionResult = useMemo(
     () => complete(value, cwdRef.current, completionData),

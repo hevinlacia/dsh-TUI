@@ -30,7 +30,8 @@ import type { CommandRuntime } from '@deepseek-ai/dsh-commands'
  */
 export interface AgentPresetsService {
   mount(agentCtx: Context, id?: string): Promise<{ id: string }>
-  list(): Promise<Array<{ id: string }>>
+  /** Re-reads the roots on every call: shipped + `$DSH_HOME/.agent-presets`. */
+  list(): Promise<Array<{ id: string; name?: string; description?: string }>>
   resolve(id?: string): Promise<{ id: string }>
 }
 

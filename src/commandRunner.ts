@@ -12,7 +12,7 @@ import { COMMANDS, lookupCommand } from './commands.js'
 import type { TuiState } from './events/reducer.js'
 import type { TuiEvent } from './events/types.js'
 import { PERMISSION_LEVELS, resolvePermission, type PermissionMode } from './permission.js'
-import { AGENT_PRESETS, isAgentPreset, type AgentPreset } from './presets.js'
+import type { PresetInfo } from './presets.js'
 
 /** The second-level modal kinds the controller can ask the UI to open. */
 export type ModalKind = 'sessions' | 'model' | 'permission' | 'preset'
@@ -30,8 +30,10 @@ export interface CommandHost {
   resumeSession(id: string): void
   switchModel(option: ModelOption): Promise<void>
   setPermissionMode(mode: PermissionMode): Promise<void>
-  setAgentPreset(preset: AgentPreset): Promise<void>
+  setAgentPreset(preset: string): Promise<void>
   listHarnessCommands(): Promise<Array<{ name: string; description: string }>>
+  /** Live preset roster (shipped + user presets). */
+  listPresets(): Promise<readonly PresetInfo[]>
   openModal(modal: ModalKind): void
   onExit(): void
   modelOptions: ModelOption[]
@@ -127,8 +129,11 @@ export async function runCommand(host: CommandHost, name: string, args: string):
         host.openModal('preset')
         break
       }
-      if (!isAgentPreset(args)) {
-        host.apply({ type: 'error', message: `unknown preset ${args} — ${AGENT_PRESETS.join(' | ')}` })
+      // Membership is a roster question: user presets (e.g. ~/.dsh/.agent-presets/hevin)
+      // are as valid as the shipped four.
+      const presets = await host.listPresets()
+      if (!presets.some(preset => preset.id === args)) {
+        host.apply({ type: 'error', message: `unknown preset ${args} — ${presets.map(p => p.id).join(' | ')}` })
         break
       }
       await host.setAgentPreset(args)

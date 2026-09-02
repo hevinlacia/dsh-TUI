@@ -1,28 +1,30 @@
 /**
- * Agent-preset vocabulary for the `/preset` command. DSH ships curated agent
- * compositions (standard / code / minimal / cordis) mounted into a preset
- * roster; a session composes from one when `meta.agentPreset` is set on create.
- * The TUI only lists/validates them; the actual composition happens in the
- * harness when the agent-presets roster is mounted (a deliberate profile
- * change — the default patch keeps the host tools, so /preset without the
- * roster just records the choice).
+ * Agent-preset vocabulary for the `/preset` command. The AUTHORITATIVE list
+ * comes from the mounted agent-presets roster at runtime (`ctx.agentPresets.
+ * list()` — shipped presets + `$DSH_HOME/.agent-presets` user presets, e.g.
+ * `hevin`), re-read on every call by the roster itself. This module only
+ * carries the fallback list (the shipped four) for the offline/degraded
+ * path, plus the shared `PresetInfo` shape.
  * @module dsh-tui/presets
  */
 
-/** The official shipped agent presets. */
-export const AGENT_PRESETS = ['standard', 'code', 'minimal', 'cordis'] as const
+/** One selectable preset in pickers/completion. */
+export interface PresetInfo {
+  id: string
+  /** One-sentence purpose from the preset's own metadata (when published). */
+  description?: string
+}
 
-export type AgentPreset = (typeof AGENT_PRESETS)[number]
+/** The shipped presets — the degraded-path fallback when the roster is unreachable. */
+export const SHIPPED_AGENT_PRESETS: readonly PresetInfo[] = [
+  { id: 'standard' },
+  { id: 'code' },
+  { id: 'minimal' },
+  { id: 'cordis' },
+]
 
 /** Default preset (the roster default). */
-export const DEFAULT_AGENT_PRESET: AgentPreset = 'standard'
+export const DEFAULT_AGENT_PRESET = 'standard'
 
-/** Human label for a preset (just the id, for now). */
-export function presetLabel(preset: AgentPreset): string {
-  return preset
-}
-
-/** Whether a value is a known preset id. */
-export function isAgentPreset(value: string): value is AgentPreset {
-  return (AGENT_PRESETS as readonly string[]).includes(value)
-}
+/** A preset id is an opaque string; membership is a roster question. */
+export type AgentPreset = string

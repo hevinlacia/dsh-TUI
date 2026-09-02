@@ -18,10 +18,11 @@
  * @module dsh-tui/ui/App
  */
 
-import { useState, type JSX } from 'react'
+import { useState, useEffect, type JSX } from 'react'
 import { Box, useWindowSize } from 'ink'
 import type { TuiController } from './controller.js'
 import { useStore } from '../state/store.js'
+import type { PresetInfo } from '../presets.js'
 import { StatusBar } from './StatusBar.js'
 import { MessageList } from './MessageList.js'
 import { InputBox } from './InputBox.js'
@@ -52,6 +53,18 @@ export function App(props: {
   // Live terminal size: re-renders this whole tree on resize, so every
   // width/height computation below is fresh (no stale rules or windows).
   const { columns, rows } = useWindowSize()
+  // The preset roster (shipped + user presets) — loaded once at mount and
+  // shared with the completion data and the preset selector.
+  const [presets, setPresets] = useState<readonly PresetInfo[]>(() => controller.cachedPresets())
+  useEffect(() => {
+    let alive = true
+    void controller.listPresets().then(result => {
+      if (alive) setPresets(result)
+    })
+    return () => {
+      alive = false
+    }
+  }, [controller])
 
   return (
     <Box flexDirection="column" width={columns} height={rows}>
@@ -86,6 +99,7 @@ export function App(props: {
           currentModel={state.model}
           running={state.phase === 'working' || state.phase === 'thinking' || state.phase === 'tool-running'}
           onToggleThinking={() => setThinkingOpen(open => !open)}
+          presets={presets}
         />
         {/* Dynamic zone BELOW the input — bounded selectors, never overlaps
             history. */}
@@ -123,6 +137,7 @@ export function App(props: {
         )}
         {modal === 'preset' && (
           <PresetSwitch
+            presets={presets}
             current={controller.currentPreset()}
             onSelect={async preset => {
               await controller.setAgentPreset(preset)
