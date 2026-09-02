@@ -1,11 +1,12 @@
 /**
- * UI-owned model memory: remembers the most recently used provider + model
- * pair across restarts. Stored as `last-model.json` under dsh-tui's own
- * state home (`~/.dsh-tui`, `DSH_TUI_HOME` overrides) — UI metadata only;
- * the runtime's compose default still comes from the resolve chain in
- * `controllerOptions` (explicit env/patch > config file > THIS memory >
- * dsh settings). Best-effort by design: any I/O or parse failure degrades to
- * "no memory" without breaking boot or switching.
+ * UI-owned state memory: remembers the most recently used provider + model
+ * pair and agent preset across restarts. Stored as `last-model.json` under
+ * dsh-tui's own state home (`~/.dsh-tui`, `DSH_TUI_HOME` overrides) — UI
+ * metadata only; the runtime's compose defaults still come from the resolve
+ * chains in `controllerOptions` / `resolveDefaultPreset` (explicit env/patch
+ * > config file > THIS memory > dsh settings). Best-effort by design: any
+ * I/O or parse failure degrades to "no memory" without breaking boot,
+ * switching, or preset changes.
  * @module dsh-tui/lastModel
  */
 
@@ -32,30 +33,55 @@ export function lastModelStatePath(): string {
   return join(tuiStateHome(), 'last-model.json')
 }
 
-/** Load the remembered pair, or null when absent/invalid/corrupt. */
-export function loadLastModel(): LastModel | null {
+/** Read the whole state document (null when absent/invalid/corrupt). */
+function readState(): Record<string, unknown> {
   try {
     const doc = JSON.parse(readFileSync(lastModelStatePath(), 'utf8')) as Record<string, unknown>
-    const provider = doc['provider']
-    const id = doc['model']
-    if (typeof provider !== 'string' || provider === '' || typeof id !== 'string' || id === '') return null
-    return { provider, id }
+    return typeof doc === 'object' && doc !== null ? doc : {}
   } catch {
-    return null
+    return {}
   }
 }
 
-/** Persist the pair (atomic replace; failures are silently ignored). */
-export function saveLastModel(provider: string, id: string): void {
+/** Merge-patch the state document (atomic replace; failures silently ignored). */
+function writeState(patch: Record<string, unknown>): void {
   try {
     const dir = tuiStateHome()
     mkdirSync(dir, { recursive: true })
     const path = lastModelStatePath()
     const tmp = `${path}.tmp-${process.pid}`
-    const doc = { version: 1, provider, model: id, updatedAt: new Date().toISOString() }
+    const doc = { ...readState(), ...patch, version: 1, updatedAt: new Date().toISOString() }
     writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`, 'utf8')
     renameSync(tmp, path)
   } catch {
-    // Memory is best-effort; a read-only home must never break a model switch.
+    // Memory is best-effort; a read-only home must never break a switch.
   }
+}
+
+/** A non-empty trimmed string, or undefined. */
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined
+}
+
+/** Load the remembered provider + model pair, or null. */
+export function loadLastModel(): LastModel | null {
+  const doc = readState()
+  const provider = text(doc['provider'])
+  const id = text(doc['model'])
+  return provider !== undefined && id !== undefined ? { provider, id } : null
+}
+
+/** Remember the provider + model pair (merged with the rest of the state). */
+export function saveLastModel(provider: string, id: string): void {
+  writeState({ provider, model: id })
+}
+
+/** Load the remembered agent preset, or null. */
+export function loadLastPreset(): string | null {
+  return text(readState()['preset']) ?? null
+}
+
+/** Remember the agent preset (merged with the rest of the state). */
+export function saveLastPreset(preset: string): void {
+  writeState({ preset })
 }
