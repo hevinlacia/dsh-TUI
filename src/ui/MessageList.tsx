@@ -16,6 +16,7 @@ import { MessageItem } from './MessageItem.js'
 import { ToolCard } from './ToolCard.js'
 import { useMouseWheel } from './useMouseWheel.js'
 import { matchPageKey } from './pageKeys.js'
+import { wheelAccumulator } from './wheelSpeed.js'
 
 /** Render-window size; offset can slide the window over the whole history. */
 const TAIL_WINDOW = 512
@@ -59,10 +60,13 @@ export function MessageList(props: {
     prevUserRef.current = userCount
   }, [state.items, total])
 
-  // Mouse wheel — one notch = one item; the stable wrapper keeps the
-  // stdin subscription from being torn down on every render.
+  // Mouse wheel — two notches = one item (half speed, see wheelSpeed);
+  // the stable wrapper keeps the stdin subscription from being torn down on
+  // every render, and the accumulator instance outlives renders too.
   const wheelRef = useRef<(direction: 'up' | 'down') => void>(() => {})
+  const wheelGate = useRef(wheelAccumulator())
   wheelRef.current = (direction: 'up' | 'down'): void => {
+    if (!wheelGate.current(direction)) return
     setOffset(value => direction === 'up' ? Math.min(maxOffset, value + 1) : Math.max(0, value - 1))
   }
   const onWheel = useCallback((direction: 'up' | 'down'): void => { wheelRef.current(direction) }, [])
