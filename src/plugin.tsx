@@ -891,7 +891,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
 
   controller.subscribe()
-  app = render(<Root />)
+  // kittyKeyboard auto-negotiation: query the terminal for the Kitty
+  // keyboard protocol and enable disambiguate-escape-codes when supported
+  // (Ghostty/kitty/WezTerm do). This is what makes Shift+Enter arrive as a
+  // DISTINCT key (CSI 13;2u -> key.return + key.shift) instead of a plain
+  // \r that is indistinguishable from Enter. Terminals without the
+  // protocol keep sending plain \r; Ctrl+J remains the universal newline.
+  app = render(<Root />, { kittyKeyboard: { mode: 'auto', flags: ['disambiguateEscapeCodes'] } })
 
   try {
     if (requestedId !== undefined) {
