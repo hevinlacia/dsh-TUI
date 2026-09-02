@@ -86,12 +86,21 @@ export function saveLastPreset(preset: string): void {
   writeState({ preset })
 }
 
-/** Load the smart-permission default, or false. */
-export function loadLastSmart(): boolean {
-  return readState()['smart'] === true
+/** The permission modes the memory accepts (validated by the caller). */
+const PERMISSION_MODES = new Set(['read-only', 'workspace-write', 'danger-full-access', 'smart'])
+
+/**
+ * Load the remembered permission mode, or null. Migrates the legacy
+ * `smart: true` boolean (pre-full-mode memory) to `permission: 'smart'`.
+ */
+export function loadLastPermission(): string | null {
+  const doc = readState()
+  const mode = text(doc['permission'])
+  if (mode !== undefined && PERMISSION_MODES.has(mode)) return mode
+  return doc['smart'] === true ? 'smart' : null
 }
 
-/** Remember the smart-permission default (merged with the rest of the state). */
-export function saveLastSmart(smart: boolean): void {
-  writeState({ smart })
+/** Remember the permission mode (merged with the rest of the state). */
+export function saveLastPermission(mode: string): void {
+  writeState({ permission: mode })
 }
