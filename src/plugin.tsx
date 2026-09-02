@@ -414,6 +414,12 @@ class InProcessController implements TuiController, CommandHost {
     this.registerApprovalAnswerer(handle.agent)
     this.registerSubagentMonitoring(handle.agent)
     this.store.setState(() => initialState(String(sessionId)))
+    // Seed the footer with the compose provider/model (the remembered pair
+    // on a normal boot; the pre-switch default after /model). Replayed
+    // `request/context` events from a resumed session's durable log
+    // overwrite this with the session's own route — the session truth wins.
+    // Without the seed the footer reads "no-model" until the first turn.
+    this.apply({ type: 'context', provider: this.defaultProvider, model: this.defaultModel })
     // Replay the durable log so a resumed session paints its history.
     for (const event of handle.agent.session.events) {
       this.onSessionEvent(handle.agent.session, event)
@@ -690,11 +696,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     options.model,
     resolveDefaultPreset(config),
   )
-
-  // Seed the status line with the resolved provider/model (the remembered
-  // pair on a normal boot) — without this the footer reads "no-model" until
-  // the first turn's session events arrive.
-  controller.apply({ type: 'context', provider: options.provider, model: options.model })
 
   /** Root owns modal state and mirrors the setter into the controller hook. */
   function Root(): JSX.Element {

@@ -49,7 +49,9 @@ export function initialState(sessionId: string): TuiState {
     connection: 'connecting',
     phase: 'idle',
     sessionId,
-    provider: 'deepseek-official',
+    // Unknown until the controller seeds it post-attach (compose defaults or
+    // the resumed session's own request/context); '' renders as no provider.
+    provider: '',
     model: '',
     effort: '',
     title: '',
