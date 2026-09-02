@@ -15,7 +15,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { decompress } from 'fzstd'
 import { join } from 'node:path'
 import React, { useState, type JSX } from 'react'
@@ -701,6 +701,34 @@ function envText(name: string): string | undefined {
 }
 
 /**
+ * Cheap existence probe: does a persisted session with this exact id exist?
+ * Walks the sessions tree comparing DIRECTORY NAMES only — no log
+ * decompression. `sessions()` would also work but fully parses every log for
+ * titles (sync zstd + JSON on the main thread), which blocks the event loop
+ * for seconds on a 100+ session store — exactly the "stuck on connecting"
+ * boot the `--session-id` path used to hit.
+ */
+function hasPersistedSession(id: string): boolean {
+  const root = join(dshHome(), 'sessions')
+  const walk = (dir: string, depth: number): boolean => {
+    if (depth > 3) return false
+    let entries: { name: string; isDirectory(): boolean }[] = []
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return false
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (entry.name === id) return existsSync(join(dir, entry.name, 'session.jsonl.zstd'))
+      if (entry.name.startsWith('--') && walk(join(dir, entry.name), depth + 1)) return true
+    }
+    return false
+  }
+  return walk(root, 0)
+}
+
+/**
  * Start the in-process TUI. Creates/resumes an agent, subscribes to session
  * events, renders the App, and resolves when the TUI teardown completes.
  *
@@ -774,9 +802,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   try {
     if (requestedId !== undefined) {
       // pi `--session-id` semantics: resume the id when it exists, else
-      // create with it (external tools can pre-bind the id).
-      const known = controller.sessions().some(session => session.id === requestedId)
-      if (known) await controller.resumeSession(requestedId)
+      // create with it (external tools can pre-bind the id). The existence
+      // probe must stay cheap — see hasPersistedSession.
+      if (hasPersistedSession(requestedId)) await controller.resumeSession(requestedId)
       else await controller.newSession(requestedId)
     } else {
       await controller.newSession()
