@@ -85,3 +85,13 @@ export function loadLastPreset(): string | null {
 export function saveLastPreset(preset: string): void {
   writeState({ preset })
 }
+
+/** Load the smart-permission default, or false. */
+export function loadLastSmart(): boolean {
+  return readState()['smart'] === true
+}
+
+/** Remember the smart-permission default (merged with the rest of the state). */
+export function saveLastSmart(smart: boolean): void {
+  writeState({ smart })
+}
