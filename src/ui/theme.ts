@@ -31,7 +31,10 @@ export const palette = {
   inputRule: '#2a3750',
   commandName: 'yellowBright',
   commandItem: 'gray',
-  commandSelected: 'blueBright',
+  // pi's select-list mapping: selected line = accent (green in the reference
+  // terminal), descriptions + scroll indicator muted.
+  commandSelected: 'greenBright',
+  commandMeta: 'gray',
 
   // Pixel-whale splash hero (reference style). Four-tone sprite from the
   // DeepSeek pixel whale: deep-navy outline, DeepSeek-blue body, ice-blue

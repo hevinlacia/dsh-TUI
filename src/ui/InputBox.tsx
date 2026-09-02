@@ -400,10 +400,12 @@ export function InputBox(props: {
 
   return (
     <Box flexDirection="column">
-      {menuOpen && <CommandMenu items={items} selected={selected} />}
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
       <Text>{value.slice(0, cursor)}<Text inverse>{cursor < value.length && value[cursor] !== '\n' ? value[cursor] : ' '}</Text>{value.slice(cursor + 1)}</Text>
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
+      {/* pi renders the completion rows BELOW the editor frame, appended to
+          the editor's output with no surrounding box. */}
+      {menuOpen && <CommandMenu items={items} selected={selected} width={ruleWidth} />}
     </Box>
   )
 }

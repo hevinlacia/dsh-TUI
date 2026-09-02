@@ -10,8 +10,8 @@ import type { CompletionItem } from '../completion.js'
 import { MenuList, type MenuRow } from './MenuList.js'
 
 /** Render the live completion menu (already filtered by the engine). */
-export function CommandMenu(props: { items: CompletionItem[]; selected: number }): JSX.Element {
-  const { items, selected } = props
+export function CommandMenu(props: { items: CompletionItem[]; selected: number; width?: number }): JSX.Element {
+  const { items, selected, width } = props
   const rows: MenuRow[] = items.map(item => ({ label: item.label, meta: item.meta }))
-  return <MenuList rows={rows} selected={selected} />
+  return <MenuList rows={rows} selected={selected} width={width} />
 }
