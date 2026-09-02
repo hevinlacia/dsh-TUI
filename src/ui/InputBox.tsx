@@ -406,8 +406,17 @@ export function InputBox(props: {
       <Text>{value.slice(0, cursor)}<Text inverse>{cursor < value.length && value[cursor] !== '\n' ? value[cursor] : ' '}</Text>{value.slice(cursor + 1)}</Text>
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
       {/* pi renders the completion rows BELOW the editor frame, appended to
-          the editor's output with no surrounding box. */}
-      {menuOpen && <CommandMenu items={items} selected={selected} width={ruleWidth} />}
+          the editor's output with no surrounding box. The 12–32 primary
+          column clamp applies only to command names; argument candidates
+          (provider · model rows) and path entries render in full. */}
+      {menuOpen && (
+        <CommandMenu
+          items={items}
+          selected={selected}
+          width={ruleWidth}
+          clampPrimary={result.kind === 'command'}
+        />
+      )}
     </Box>
   )
 }

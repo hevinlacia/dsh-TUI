@@ -21,12 +21,16 @@ export interface MenuRow {
 
 /** Visible rows before the list scrolls (pi default: 5). */
 const DEFAULT_MAX_VISIBLE = 5
-/** Primary column = clamp(widest label + gap, 12, 32), like pi's slash layout. */
+/** Default primary column when no width is known (pi's slash default). */
+const DEFAULT_PRIMARY_COLUMN_WIDTH = 32
+/** Primary column = clamp(widest label + gap, 12, 32) for the slash menu. */
 const PRIMARY_GAP = 2
-const MIN_PRIMARY_COLUMN_WIDTH = 12
-const MAX_PRIMARY_COLUMN_WIDTH = 32
+export const MIN_PRIMARY_COLUMN_WIDTH = 12
+export const MAX_PRIMARY_COLUMN_WIDTH = 32
 /** Below this terminal width the description column is dropped (pi rule). */
 const DESCRIPTION_MIN_WIDTH = 40
+/** Minimum room the description column needs before it is dropped. */
+const MIN_DESCRIPTION_WIDTH = 10
 
 /** Truncate `text` to `max` display columns (CJK-aware). */
 function truncateToWidth(text: string, max: number): string {
@@ -49,14 +53,21 @@ export function MenuList(props: {
   /** Terminal content width; the description column needs > 40 columns. */
   width?: number
   maxVisible?: number
+  /** pi slash-menu layout (clamp the primary column 12–32). Only for SHORT
+   * labels (command names). Omit for long-label selectors: the column then
+   * sizes to the widest label up to the available width, so labels like
+   * `provider · model` render in full. */
+  primaryColumn?: { min: number; max: number }
 }): JSX.Element {
-  const { rows, selected, width, maxVisible = DEFAULT_MAX_VISIBLE } = props
+  const { rows, selected, width, maxVisible = DEFAULT_MAX_VISIBLE, primaryColumn } = props
   const sel = Math.min(Math.max(selected, 0), rows.length - 1)
-  const widest = rows.reduce((acc, row) => Math.max(acc, stringWidth(row.label)), 0)
-  const columnWidth = Math.min(
-    MAX_PRIMARY_COLUMN_WIDTH,
-    Math.max(MIN_PRIMARY_COLUMN_WIDTH, widest + PRIMARY_GAP),
-  )
+  const widest = rows.reduce((acc, row) => Math.max(acc, stringWidth(row.label)), 0) + PRIMARY_GAP
+  // Hard cap: the column must fit between the prefix and the terminal edge
+  // (labels longer than that still truncate, width-safety only).
+  const available = Math.max(MIN_PRIMARY_COLUMN_WIDTH, (width ?? DEFAULT_PRIMARY_COLUMN_WIDTH) - 2)
+  const columnWidth = primaryColumn !== undefined
+    ? Math.min(primaryColumn.max, Math.max(primaryColumn.min, widest))
+    : Math.min(Math.max(MIN_PRIMARY_COLUMN_WIDTH, widest), available)
 
   // Centered scroll window (pi SelectList): keep the selection mid-list and
   // clamp the window to the bounds.
@@ -68,14 +79,17 @@ export function MenuList(props: {
 
   const showDescriptions = width === undefined || width > DESCRIPTION_MIN_WIDTH
   const descWidth = width === undefined ? undefined : width - 2 - columnWidth - 2
+  // Each label renders in full up to the column width; the hard terminal
+  // guard only kicks in for labels wider than the screen itself.
+  const labelMax = Math.min(columnWidth - PRIMARY_GAP, Math.max(1, available - PRIMARY_GAP))
 
   return (
     <Box flexDirection="column">
       {rows.slice(start, end).map((row, index) => {
         const isSel = start + index === sel
         const prefix = isSel ? '→ ' : '  '
-        if (row.meta !== undefined && showDescriptions && descWidth !== undefined && descWidth >= 10) {
-          const label = truncateToWidth(row.label, columnWidth - PRIMARY_GAP)
+        if (row.meta !== undefined && showDescriptions && descWidth !== undefined && descWidth >= MIN_DESCRIPTION_WIDTH) {
+          const label = truncateToWidth(row.label, labelMax)
           const desc = truncateToWidth(row.meta, descWidth)
           if (isSel) {
             // pi renders the WHOLE selected line in the accent color.
@@ -94,7 +108,7 @@ export function MenuList(props: {
         }
         return (
           <Text key={`${start + index}:${row.label}`} color={isSel ? palette.commandSelected : undefined}>
-            {`${prefix}${truncateToWidth(row.label, columnWidth - PRIMARY_GAP)}`}
+            {`${prefix}${truncateToWidth(row.label, labelMax)}`}
           </Text>
         )
       })}
