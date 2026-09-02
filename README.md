@@ -147,6 +147,15 @@ Both `dsh --profile web` and `dsh --profile tui` compose the same base row
 durable logs. The profile patch re-points the root only when
 `DSH_TUI_SESSION_ROOT` is set (test isolation).
 
+### Scrollback (滚轮查看历史)
+
+The mouse wheel scrolls the in-app history at any time — including WHILE the
+model is streaming: reviewing holds the visible items still (new output
+lands below without yanking the view), a new submitted message snaps back to
+the tail, and `PageUp`/`PageDown` page as before. This uses the terminal's
+SGR mouse reporting (DECSET 1000/1006), which Ghostty/kitty/WezTerm/xterm
+all support.
+
 ### Multi-line input
 
 `Shift+Enter` inserts a newline (the box holds multi-line text; arrows move

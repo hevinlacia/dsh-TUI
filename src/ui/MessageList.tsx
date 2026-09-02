@@ -1,17 +1,20 @@
 /**
  * R2 — chat area: the ordered surface of user/assistant/tool items with an
- * auto-following tail window and keyboard scrollback. Ink has no scrolling
+ * auto-following tail window and scrollback. Ink has no scrolling
  * primitives, so the rendered window slides over the full item history:
- * PageUp/PageDown move the window (the tail stays pinned when at offset 0);
- * submitting a new message or clearing snaps back to the tail.
+ * PageUp/PageDown AND the mouse wheel (DECSET 1000/1006, see useMouseWheel)
+ * move the window; reviewing holds the visible items STILL while the agent
+ * streams (the offset tracks incoming items), and submitting a new message
+ * or clearing snaps back to the tail.
  * @module dsh-tui/ui/MessageList
  */
 
-import { useEffect, useRef, useState, type JSX } from 'react'
+import { useEffect, useRef, useState, useCallback, type JSX } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
 import type { TuiState } from '../events/reducer.js'
 import { MessageItem } from './MessageItem.js'
 import { ToolCard } from './ToolCard.js'
+import { useMouseWheel } from './useMouseWheel.js'
 
 /** Render-window size; offset can slide the window over the whole history. */
 const TAIL_WINDOW = 512
@@ -46,10 +49,23 @@ export function MessageList(props: {
     for (const item of state.items) if (item.kind === 'user') userCount += 1
     if (total < prevTotalRef.current || userCount > prevUserRef.current) {
       setOffset(0)
+    } else if (total > prevTotalRef.current) {
+      // Streaming while reviewing: bump the offset by the incoming count so
+      // the visible items hold STILL instead of sliding with the tail.
+      setOffset(value => (value > 0 ? value + (total - prevTotalRef.current) : value))
     }
     prevTotalRef.current = total
     prevUserRef.current = userCount
   }, [state.items, total])
+
+  // Mouse wheel — one notch = one item; the stable wrapper keeps the
+  // stdin subscription from being torn down on every render.
+  const wheelRef = useRef<(direction: 'up' | 'down') => void>(() => {})
+  wheelRef.current = (direction: 'up' | 'down'): void => {
+    setOffset(value => direction === 'up' ? Math.min(maxOffset, value + 1) : Math.max(0, value - 1))
+  }
+  const onWheel = useCallback((direction: 'up' | 'down'): void => { wheelRef.current(direction) }, [])
+  useMouseWheel(onWheel)
 
   useInput((_input, key) => {
     if (key.pageUp) {

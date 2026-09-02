@@ -265,6 +265,9 @@ export function InputBox(props: {
 
   useInput((input, key) => {
     if (modalOpen) return // modals own the keyboard while open
+    // Mouse-wheel bytes (DECSET 1000/1006 SGR sequences, see useMouseWheel)
+    // leak through Ink's keypress parser as '[<64;…' garbage — never text.
+    if (input.startsWith('[<') || input.startsWith('[M')) return
     if (key.ctrl && input === 'c') {
       if (running) {
         controller.interrupt()
