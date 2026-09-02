@@ -43,6 +43,7 @@ import {
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
 import { loadLastModel, loadLastPermission, loadLastPreset, saveLastModel, saveLastPermission, saveLastPreset } from './lastModel.js'
 import { PERMISSION_LEVELS } from './permission.js'
+import { resumeHint } from './sessionHint.js'
 import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, sandboxModeFor, type PermissionMode } from './permission.js'
 import { classifyToolCall } from './smartPermission.js'
 import { DEFAULT_AGENT_PRESET, SHIPPED_AGENT_PRESETS, type PresetInfo } from './presets.js'
@@ -859,6 +860,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         void controller.disposeAgent().finally(() => {
           app?.unmount()
           exitResolve()
+          // With the frame gone, leave a copy-pasteable resume command for
+          // the session just ended (only when it actually persisted).
+          const id = controller.currentSessionId()
+          if (hasPersistedSession(id)) {
+            const hint = resumeHint(id, controller.currentTitle())
+            if (hint !== null) console.log(`\n${hint}`)
+          }
           process.exit(0)
         })
       },

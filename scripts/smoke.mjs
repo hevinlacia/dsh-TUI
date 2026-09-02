@@ -177,5 +177,15 @@ console.log('dsh-tui smoke')
   check('pageKey: unmatched key flags null', matchPageKey('x', { pageUp: false, pageDown: false, escape: true }) === null)
 }
 
+{
+  // Post-exit resume hint formatting
+  const { resumeHint } = await import('../lib/sessionHint.js')
+  check('hint: id + title', resumeHint('session-abc', '重构签到') === '继续会话「重构签到」: dsh-tui --session-id session-abc')
+  check('hint: bare id without title', resumeHint('session-abc', '') === '继续会话: dsh-tui --session-id session-abc')
+  check('hint: title equals id collapses', resumeHint('session-abc', 'session-abc') === '继续会话: dsh-tui --session-id session-abc')
+  check('hint: whitespace-only title collapses', resumeHint('session-abc', '  ') === '继续会话: dsh-tui --session-id session-abc')
+  check('hint: no id → null', resumeHint(undefined, 'x') === null && resumeHint('', 'x') === null)
+}
+
 process.exitCode = failures === 0 ? 0 : 1
 console.log(failures === 0 ? 'smoke PASS' : `smoke FAIL (${failures})`)
