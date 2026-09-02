@@ -106,19 +106,23 @@ console.log('dsh-tui smoke')
   check('launcher dry-run prints spawn dsh', /^spawn dsh --profile /m.test(launcher.stdout), launcher.stdout)
 }
 
-// 6. model memory round-trip (keyless, isolated via DSH_TUI_HOME)
+// 6. model + preset memory round-trip (keyless, isolated via DSH_TUI_HOME)
 {
   const os = await import('node:os')
   const fs = await import('node:fs')
   const dir = fs.mkdtempSync(join(os.tmpdir(), 'dsh-tui-mem-'))
   process.env.DSH_TUI_HOME = dir
   const mem = await import(join(root, 'lib/lastModel.js'))
-  check('model memory starts empty', mem.loadLastModel() === null)
+  check('memory starts empty', mem.loadLastModel() === null && mem.loadLastPreset() === null)
   mem.saveLastModel('llm-provider-router', 'high-model-auto')
+  mem.saveLastPreset('hevin')
   const remembered = mem.loadLastModel()
   check('model memory round-trip', remembered?.provider === 'llm-provider-router' && remembered?.id === 'high-model-auto', JSON.stringify(remembered))
+  check('preset memory round-trip', mem.loadLastPreset() === 'hevin')
+  check('preset save keeps model pair', remembered?.provider === 'llm-provider-router' && remembered?.id === 'high-model-auto')
+  check('model save keeps preset', mem.loadLastPreset() === 'hevin')
   fs.writeFileSync(join(dir, 'last-model.json'), '{oops', 'utf8')
-  check('corrupt model memory → null', mem.loadLastModel() === null)
+  check('corrupt memory → null', mem.loadLastModel() === null && mem.loadLastPreset() === null)
   fs.rmSync(dir, { recursive: true, force: true })
 }
 

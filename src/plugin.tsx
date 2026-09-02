@@ -39,7 +39,7 @@ import {
   type SessionId,
 } from './official.js'
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
-import { loadLastModel, saveLastModel } from './lastModel.js'
+import { loadLastModel, loadLastPreset, saveLastModel, saveLastPreset } from './lastModel.js'
 import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, type PermissionMode } from './permission.js'
 import { DEFAULT_AGENT_PRESET, SHIPPED_AGENT_PRESETS, type PresetInfo } from './presets.js'
 import { parseInput } from './commands.js'
@@ -231,8 +231,7 @@ class InProcessController implements TuiController, CommandHost {
     // Remember across restarts (best-effort UI-owned state).
     saveLastModel(option.provider, option.id)
     this.apply({ type: 'context', provider: option.provider, model: option.id })
-    this.apply({ type: 'notice', message: `model → ${option.id} (new sessions; /new to start one)` })
-  }
+    this.apply({ type: 'notice', message: `model → ${option.id} (new sessions; /new to start one)` })  }
 
   /** The session's current effective permission mode (fold of sandbox/mode events). */
   currentPermission(): PermissionMode {
@@ -249,6 +248,8 @@ class InProcessController implements TuiController, CommandHost {
   /** Switch the agent preset used to compose new sessions (applies on /new). */
   async setAgentPreset(preset: string): Promise<void> {
     this.defaultPreset = preset
+    // Remember across restarts (best-effort UI-owned state).
+    saveLastPreset(preset)
     this.apply({ type: 'notice', message: `preset → ${preset} (new sessions; /new to start one)` })
   }
 
@@ -623,11 +624,11 @@ function subId(identity: unknown): string {
   return ''
 }
 
-/** Resolve the effective agent preset: plugin config → config file → default.
- * Membership is NOT checked here — a preset id is an opaque string and the
- * roster mount reports unknown ids visibly at session creation. */
+/** Resolve the effective agent preset: plugin config → config file → last-used
+ * memory → default. Membership is NOT checked here — a preset id is an opaque
+ * string and the roster mount reports unknown ids visibly at session creation. */
 function resolveDefaultPreset(config: Config): string {
-  return config.preset ?? loadTuiConfigFile().preset ?? DEFAULT_AGENT_PRESET
+  return config.preset ?? loadTuiConfigFile().preset ?? loadLastPreset() ?? DEFAULT_AGENT_PRESET
 }
 
 /** Build the controller's CliOptions from plugin config → config file → last-used memory → dsh settings. */
@@ -689,6 +690,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     options.model,
     resolveDefaultPreset(config),
   )
+
+  // Seed the status line with the resolved provider/model (the remembered
+  // pair on a normal boot) — without this the footer reads "no-model" until
+  // the first turn's session events arrive.
+  controller.apply({ type: 'context', provider: options.provider, model: options.model })
 
   /** Root owns modal state and mirrors the setter into the controller hook. */
   function Root(): JSX.Element {
