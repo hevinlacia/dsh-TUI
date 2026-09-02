@@ -41,7 +41,8 @@ import {
   type SessionId,
 } from './official.js'
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
-import { loadLastModel, loadLastPreset, loadLastSmart, saveLastModel, saveLastPreset, saveLastSmart } from './lastModel.js'
+import { loadLastModel, loadLastPermission, loadLastPreset, saveLastModel, saveLastPermission, saveLastPreset } from './lastModel.js'
+import { PERMISSION_LEVELS } from './permission.js'
 import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, sandboxModeFor, type PermissionMode } from './permission.js'
 import { classifyToolCall } from './smartPermission.js'
 import { DEFAULT_AGENT_PRESET, SHIPPED_AGENT_PRESETS, type PresetInfo } from './presets.js'
@@ -157,9 +158,10 @@ class InProcessController implements TuiController, CommandHost {
    * (from `--append-system-prompt`); registered on the agent-scoped setup ctx
    * so it unwinds with the agent. */
   attachedPrompt: string | undefined
-  /** Smart-permission answerer active (risk-graded auto-answer). A UI-side
-   * policy layered on workspace-write + ask knobs; never a sandbox value. */
-  private smartActive = false
+  /** Remembered permission mode (null = follow the session/deployment
+   * fold). 'smart' arms the risk-graded answerer; any other remembered mode
+   * is written through to each new session's knobs at attach. */
+  private permissionMemory: PermissionMode | null = null
   /** Monotonic id for pending model-facing interactions (approval/question). */
   private interactionSeq = 0
   /** Pending interaction resolvers, keyed by seq (the agent blocks one at a time). */
@@ -181,7 +183,10 @@ class InProcessController implements TuiController, CommandHost {
     this.currentId = { current: initialId }
     this.defaultProvider = defaultProvider
     this.defaultModel = defaultModel
-    this.smartActive = loadLastSmart()
+    const remembered = loadLastPermission()
+    this.permissionMemory = remembered !== null && PERMISSION_LEVELS.some(level => level.mode === remembered)
+      ? (remembered as PermissionMode)
+      : null
     this.defaultPreset = defaultPreset
   }
 
@@ -289,7 +294,7 @@ class InProcessController implements TuiController, CommandHost {
 
   /** The session's current effective permission mode (fold of sandbox/mode events). */
   currentPermission(): PermissionMode {
-    if (this.smartActive) return 'smart'
+    if (this.permissionMemory !== null) return this.permissionMemory
     const agent = this.handle?.agent
     if (agent === undefined) return DEFAULT_PERMISSION
     return effectiveSandboxMode(agent.session.events) ?? DEFAULT_PERMISSION
@@ -347,10 +352,9 @@ class InProcessController implements TuiController, CommandHost {
   async setPermissionMode(mode: PermissionMode): Promise<void> {
     const agent = this.handle?.agent
     if (agent === undefined) return
-    // smart = UI answerer policy over workspace-write + ask knobs (the
-    // sandbox type has no 'smart'); the other three write through directly.
-    this.smartActive = mode === 'smart'
-    saveLastSmart(this.smartActive)
+    // Remember the mode (all four) — restored on the next boot.
+    this.permissionMemory = mode
+    saveLastPermission(mode)
     setSandboxMode(agent.session, sandboxModeFor(mode) as SandboxMode)
     this.ctx.approval.setPolicy(agent, approvalPolicyFor(mode))
     this.apply({ type: 'permission', mode })
@@ -450,8 +454,17 @@ class InProcessController implements TuiController, CommandHost {
       this.onSessionEvent(handle.agent.session, event)
     }
     // The permission is its own fold (deployment default when no override);
-    // `eventsFor` maps `sandbox/mode` too, but set it explicitly so a session
-    // with no override still shows the deployment default.
+    // a REMEMBERED mode is written through to the session's actual knobs
+    // when they disagree — the footer must never claim a mode the knobs
+    // don't have. Otherwise just mirror the fold.
+    const remembered = this.permissionMemory
+    if (remembered !== null) {
+      const target = sandboxModeFor(remembered)
+      if (effectiveSandboxMode(handle.agent.session.events) !== target) {
+        setSandboxMode(handle.agent.session, target as SandboxMode)
+        this.ctx.approval.setPolicy(handle.agent, approvalPolicyFor(remembered))
+      }
+    }
     this.apply({ type: 'permission', mode: this.currentPermission() })
     // Refresh the store cache in the background (the new/resumed session's
     // title lands for the browser + completions).
@@ -556,7 +569,7 @@ class InProcessController implements TuiController, CommandHost {
    * smart mode active the risk classifier answers first: low → allow, high →
    * reject with a visible notice, medium → the normal interactive prompt. */
   private async answerApproval(req: ApprovalRequest): Promise<ApprovalOutcome> {
-    if (this.smartActive) {
+    if (this.permissionMemory === 'smart') {
       const risk = classifyToolCall(req.toolName, this.toolArgsFor(req.callId))
       if (risk === 'low') return 'allowed-once'
       if (risk === 'high') {
