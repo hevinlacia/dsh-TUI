@@ -83,6 +83,21 @@ cwd: /home/hevin/Developer
 preset: standard
 ```
 
+### Model memory
+
+The provider + model pair you switch to (`/model <id>` or the picker) is
+remembered in dsh-tui's own state file (`~/.dsh-tui/last-model.json`) and
+restored on the next start — as long as the pair still exists in the dsh
+settings options and nothing more explicit pins a model. Resolve chain for
+provider/model on boot:
+
+```
+env / cordis patch  >  config file  >  last-used memory  >  dsh settings  >  built-in default
+```
+
+To pin a model permanently, set `model:` in the config file or
+`DSH_TUI_MODEL` in the environment; both outrank the memory.
+
 ### Env / flags
 
 | Option | Env Var | Default | Meaning |

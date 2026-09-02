@@ -106,5 +106,21 @@ console.log('dsh-tui smoke')
   check('launcher dry-run prints spawn dsh', /^spawn dsh --profile /m.test(launcher.stdout), launcher.stdout)
 }
 
+// 6. model memory round-trip (keyless, isolated via DSH_TUI_HOME)
+{
+  const os = await import('node:os')
+  const fs = await import('node:fs')
+  const dir = fs.mkdtempSync(join(os.tmpdir(), 'dsh-tui-mem-'))
+  process.env.DSH_TUI_HOME = dir
+  const mem = await import(join(root, 'lib/lastModel.js'))
+  check('model memory starts empty', mem.loadLastModel() === null)
+  mem.saveLastModel('llm-provider-router', 'high-model-auto')
+  const remembered = mem.loadLastModel()
+  check('model memory round-trip', remembered?.provider === 'llm-provider-router' && remembered?.id === 'high-model-auto', JSON.stringify(remembered))
+  fs.writeFileSync(join(dir, 'last-model.json'), '{oops', 'utf8')
+  check('corrupt model memory → null', mem.loadLastModel() === null)
+  fs.rmSync(dir, { recursive: true, force: true })
+}
+
 process.exitCode = failures === 0 ? 0 : 1
 console.log(failures === 0 ? 'smoke PASS' : `smoke FAIL (${failures})`)
