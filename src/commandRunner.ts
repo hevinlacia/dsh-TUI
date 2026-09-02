@@ -26,8 +26,12 @@ export interface CommandHost {
   currentState(): TuiState
   apply(event: TuiEvent): void
   clear(): void
-  newSession(): void
+  newSession(id?: string): void
   resumeSession(id: string): void
+  /** Rename the live session (pins the title). */
+  renameSession(title: string): Promise<void>
+  /** The current session title ('' before the first title event). */
+  currentTitle(): string
   switchModel(option: ModelOption): Promise<void>
   setPermissionMode(mode: PermissionMode): Promise<void>
   setAgentPreset(preset: string): Promise<void>
@@ -66,6 +70,14 @@ export async function runCommand(host: CommandHost, name: string, args: string):
     }
     case 'clear':
       host.clear()
+      break
+    case 'name':
+      if (args === '') {
+        const title = host.currentTitle()
+        host.apply({ type: 'notice', message: title === '' ? 'no title yet (auto once eligible input exists)' : `name: ${title}` })
+      } else {
+        await host.renameSession(args)
+      }
       break
     case 'status':
       // Show the FULL session id so `/resume <id>` gets a copy-paste-able id.

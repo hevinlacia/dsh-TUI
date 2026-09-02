@@ -106,6 +106,9 @@ outrank the memory.
 | Option | Env Var | Default | Meaning |
 | --- | --- | --- | --- |
 | `--profile <name>` | `DSH_TUI_PROFILE` | `tui` | profile to boot |
+| `--session-id <id>` | `DSH_TUI_SESSION_ID` | — | resume the id when known, else create with it |
+| `--name <title>` | `DSH_TUI_NAME` | — | pin the session title (stops auto title) |
+| `--append-system-prompt <@path>` | `DSH_TUI_APPEND_SYSTEM_PROMPT` | — | append a file's text to every new session's system prompt |
 | — | `DSH_TUI_PROVIDER` | settings default | provider route for new sessions |
 | — | `DSH_TUI_MODEL` | settings default | model for new sessions |
 | — | `DSH_TUI_MODELS` | settings list | comma-separated switchable models |
@@ -113,6 +116,28 @@ outrank the memory.
 | — | `DSH_TUI_RESUME_SESSION` | — | session id to resume on boot |
 | — | `DSH_TUI_CWD` | config `cwd` / `process.cwd()` | session workspace |
 | — | `DSH_TUI_PERSONA` | `You are a coding agent.` | deployment persona |
+
+### Requirement sessions (pi parity)
+
+Bind a session to a requirement the same way you would with pi + an external
+panel — a pre-chosen id (so tools can reference it), a pinned human title,
+and a background context file appended to the system prompt:
+
+```fish
+cd ~/Developer/company/WMS
+bin/dsh-tui.js --session-id 2161d38e-a7f9-4853-b431-c6667c3ff145 \
+  --name '订单回退master合并不完整修复' \
+  --append-system-prompt @~/.local/share/agent-panel/ctx/2161d38e-a7f9-4853-b431-c6667c3ff145.md
+```
+
+- the id resumes when the session already exists, otherwise it is created
+  with that exact id (external tools can pre-bind it)
+- `--name` appends a user-sourced `session/title` event — the pinned title
+  shows in the status bar and `/resume`, and automatic title generation stops
+- `--append-system-prompt` (the `@` is optional) registers an agent-scoped
+  system-prompt section (`session-context`, order 50) — it applies to every
+  session composed in that boot and unwinds with each agent
+- inside the TUI, `/name <title>` renames the live session any time
 
 ## Sharing Sessions With Web
 

@@ -35,9 +35,27 @@ export interface AgentPresetsService {
   resolve(id?: string): Promise<{ id: string }>
 }
 
+/**
+ * Structural view of the log-backed session title service (`sessionTitle`):
+ * `rename` appends a `session/title` event with the `user` source, which PINS
+ * the title — automatic generation stops for that session (pi's `--name`).
+ * The official `dsh-session-title` types are not part of this build's program;
+ * this structural shape keeps the plugin typed without adding the dep.
+ */
+export interface SessionTitleService {
+  rename(session: Session, title: string): { title: string }
+  get(session: Session): { title: string } | undefined
+}
+
+// `systemPrompt` needs no structural re-declaration: the official
+// `dsh-system-prompt` package already augments Context with the real,
+// non-optional `SystemPrompt` service (its `.section()` is what the setup
+// callback uses for the appended prompt).
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     agentPresets?: AgentPresetsService
+    sessionTitle?: SessionTitleService
   }
 }
 
