@@ -147,6 +147,14 @@ Both `dsh --profile web` and `dsh --profile tui` compose the same base row
 durable logs. The profile patch re-points the root only when
 `DSH_TUI_SESSION_ROOT` is set (test isolation).
 
+### Multi-line input
+
+`Shift+Enter` inserts a newline (the box holds multi-line text; arrows move
+the caret across rows). Modifier-aware Enter needs the Kitty keyboard
+protocol — Ink negotiates it automatically, so it works out of the box on
+Ghostty / kitty / WezTerm and other protocol-capable terminals. On terminals
+without it, `Ctrl+J` (LF) is the universal newline chord.
+
 ## Commands inside the TUI
 
 `/help` `/status` `/context` `/new` `/resume [id]` `/sessions` `/model [name]`

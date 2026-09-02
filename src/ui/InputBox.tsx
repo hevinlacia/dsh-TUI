@@ -314,12 +314,21 @@ export function InputBox(props: {
     if (key.return) {
       if (key.shift) {
         // Shift+Enter inserts a newline instead of submitting — lets the box
-        // hold multi-line text that the cursor can now move through.
+        // hold multi-line text that the cursor can now move through. Only
+        // arrives as a distinct key on Kitty-protocol terminals (Ink
+        // negotiates it); elsewhere plain \r means Enter.
         setText(value.slice(0, cursor) + '\n' + value.slice(cursor), cursor + 1)
         setMenuDismissed(false)
         return
       }
       submitAndClear(value)
+      return
+    }
+    if (key.ctrl && input === 'j') {
+      // Ctrl+J (LF) — the universal newline chord: works in any terminal,
+      // no Kitty protocol required (same fallback pi ships).
+      setText(value.slice(0, cursor) + '\n' + value.slice(cursor), cursor + 1)
+      setMenuDismissed(false)
       return
     }
     if (key.tab) {
