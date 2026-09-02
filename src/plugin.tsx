@@ -41,8 +41,9 @@ import {
   type SessionId,
 } from './official.js'
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
-import { loadLastModel, loadLastPreset, saveLastModel, saveLastPreset } from './lastModel.js'
-import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, type PermissionMode } from './permission.js'
+import { loadLastModel, loadLastPreset, loadLastSmart, saveLastModel, saveLastPreset, saveLastSmart } from './lastModel.js'
+import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, sandboxModeFor, type PermissionMode } from './permission.js'
+import { classifyToolCall } from './smartPermission.js'
 import { DEFAULT_AGENT_PRESET, SHIPPED_AGENT_PRESETS, type PresetInfo } from './presets.js'
 import { parseInput } from './commands.js'
 import { runCommand, type CommandHost, type ModalKind } from './commandRunner.js'
@@ -156,6 +157,9 @@ class InProcessController implements TuiController, CommandHost {
    * (from `--append-system-prompt`); registered on the agent-scoped setup ctx
    * so it unwinds with the agent. */
   attachedPrompt: string | undefined
+  /** Smart-permission answerer active (risk-graded auto-answer). A UI-side
+   * policy layered on workspace-write + ask knobs; never a sandbox value. */
+  private smartActive = false
   /** Monotonic id for pending model-facing interactions (approval/question). */
   private interactionSeq = 0
   /** Pending interaction resolvers, keyed by seq (the agent blocks one at a time). */
@@ -177,6 +181,7 @@ class InProcessController implements TuiController, CommandHost {
     this.currentId = { current: initialId }
     this.defaultProvider = defaultProvider
     this.defaultModel = defaultModel
+    this.smartActive = loadLastSmart()
     this.defaultPreset = defaultPreset
   }
 
@@ -284,6 +289,7 @@ class InProcessController implements TuiController, CommandHost {
 
   /** The session's current effective permission mode (fold of sandbox/mode events). */
   currentPermission(): PermissionMode {
+    if (this.smartActive) return 'smart'
     const agent = this.handle?.agent
     if (agent === undefined) return DEFAULT_PERMISSION
     return effectiveSandboxMode(agent.session.events) ?? DEFAULT_PERMISSION
@@ -341,12 +347,19 @@ class InProcessController implements TuiController, CommandHost {
   async setPermissionMode(mode: PermissionMode): Promise<void> {
     const agent = this.handle?.agent
     if (agent === undefined) return
-    setSandboxMode(agent.session, mode as SandboxMode)
+    // smart = UI answerer policy over workspace-write + ask knobs (the
+    // sandbox type has no 'smart'); the other three write through directly.
+    this.smartActive = mode === 'smart'
+    saveLastSmart(this.smartActive)
+    setSandboxMode(agent.session, sandboxModeFor(mode) as SandboxMode)
     this.ctx.approval.setPolicy(agent, approvalPolicyFor(mode))
     this.apply({ type: 'permission', mode })
     this.apply({
       type: 'notice',
-      message: `permission → ${permissionLabel(mode)} (${approvalPolicyFor(mode) === 'never' ? '无确认' : 'ask 确认'})`,
+      message:
+        mode === 'smart'
+          ? 'permission → smart（低危自动放行 · 中危确认 · 高危拦截）'
+          : `permission → ${permissionLabel(mode)} (${approvalPolicyFor(mode) === 'never' ? '无确认' : 'ask 确认'})`,
     })
   }
 
@@ -539,8 +552,19 @@ class InProcessController implements TuiController, CommandHost {
     })
   }
 
-  /** Present an approval prompt and resolve when the user decides. */
+  /** Present an approval prompt and resolve when the user decides. With the
+   * smart mode active the risk classifier answers first: low → allow, high →
+   * reject with a visible notice, medium → the normal interactive prompt. */
   private async answerApproval(req: ApprovalRequest): Promise<ApprovalOutcome> {
+    if (this.smartActive) {
+      const risk = classifyToolCall(req.toolName, this.toolArgsFor(req.callId))
+      if (risk === 'low') return 'allowed-once'
+      if (risk === 'high') {
+        const detail = this.toolArgsFor(req.callId)?.slice(0, 160) ?? req.reason ?? ''
+        this.apply({ type: 'notice', message: `智能权限拦截高危操作（${req.toolName}）: ${detail}` })
+        return 'rejected'
+      }
+    }
     const seq = ++this.interactionSeq
     this.apply({
       type: 'interaction-open',

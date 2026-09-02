@@ -8,8 +8,8 @@
  * @module dsh-tui/permission
  */
 
-/** The three DSH permission/sandbox levels. */
-export type PermissionMode = 'read-only' | 'workspace-write' | 'danger-full-access'
+/** The three DSH permission/sandbox levels + the TUI-side smart mode. */
+export type PermissionMode = 'read-only' | 'workspace-write' | 'danger-full-access' | 'smart'
 
 /** One selectable permission level. */
 export interface PermissionLevel {
@@ -19,10 +19,14 @@ export interface PermissionLevel {
   description: string
 }
 
-/** The three selectable levels, in order. */
+/** The selectable levels, in order. `smart` is a TUI-side answerer policy
+ * (workspace-write + ask knobs, plus the risk-graded answerer — low
+ * auto-approves, medium asks, high auto-denies); it never writes a
+ * non-existent sandbox value. */
 export const PERMISSION_LEVELS: PermissionLevel[] = [
   { mode: 'read-only', label: 'read-only', description: '只读（仅必要系统端口）' },
   { mode: 'workspace-write', label: 'workspace', description: '工作区可写（默认）' },
+  { mode: 'smart', label: 'smart', description: '智能权限（低危放行·中危确认·高危拦截）' },
   { mode: 'danger-full-access', label: 'full', description: '完全访问（无确认）' },
 ]
 
@@ -40,12 +44,20 @@ export function resolvePermission(value: string): PermissionMode | undefined {
   const aliases: Record<string, PermissionMode> = {
     read: 'read-only', readonly: 'read-only', ro: 'read-only',
     workspacewrite: 'workspace-write', workspace: 'workspace-write', ws: 'workspace-write', write: 'workspace-write',
+    smart: 'smart', zhineng: 'smart', s: 'smart',
     dangerfullaccess: 'danger-full-access', danger: 'danger-full-access', full: 'danger-full-access', f: 'danger-full-access', all: 'danger-full-access',
   }
   return aliases[needle]
 }
 
-/** The approval policy matching a permission level (full access never asks). */
+/** The approval policy matching a permission level (full access never asks;
+ * smart keeps ask — its answerer decides). */
 export function approvalPolicyFor(mode: PermissionMode): 'ask' | 'never' {
   return mode === 'danger-full-access' ? 'never' : 'ask'
+}
+
+/** The SANDBOX value a permission level writes (smart runs as workspace-write
+ * knobs — the sandbox type has no 'smart'). */
+export function sandboxModeFor(mode: PermissionMode): PermissionMode {
+  return mode === 'smart' ? 'workspace-write' : mode
 }
