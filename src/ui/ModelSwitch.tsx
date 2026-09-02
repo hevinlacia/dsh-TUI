@@ -1,15 +1,18 @@
 /**
- * W7 — model switch modal: pick a model from the configured list (from dsh's
- * settings document). Applies to subsequently created sessions
+ * W7 — model switch: pick a model from the configured list (from dsh's
+ * settings document). Rendered as a pi-style plain selector BELOW the input
+ * (no border, windowed). Applies to subsequently created sessions
  * (protocol-level `initialize` re-send).
  * @module dsh-tui/ui/ModelSwitch
  */
 
 import { useState, type JSX } from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text, useInput, useWindowSize } from 'ink'
 import type { ModelOption } from '../config.js'
+import { MenuList, type MenuRow } from './MenuList.js'
+import { SELECTOR_MAX_VISIBLE } from './SessionBrowser.js'
 
-/** Modal overlay for switching the model for new sessions. */
+/** Selector for switching the model for new sessions. */
 export function ModelSwitch(props: {
   options: ModelOption[]
   current: string
@@ -17,6 +20,7 @@ export function ModelSwitch(props: {
   onClose: () => void
 }): JSX.Element {
   const { options, current, onSelect, onClose } = props
+  const { columns } = useWindowSize()
   const [index, setIndex] = useState(Math.max(0, options.findIndex(option => option.id === current)))
   const clamped = options.length === 0 ? 0 : index % options.length
 
@@ -34,29 +38,15 @@ export function ModelSwitch(props: {
     if (key.downArrow) setIndex(i => (i + 1) % Math.max(1, options.length))
   })
 
+  const rows: MenuRow[] = options.map(option => ({
+    label: `${option.provider} · ${option.name}`,
+    meta: option.id === current ? '(current)' : undefined,
+  }))
+
   return (
-    <Box
-      position="absolute"
-      top={6}
-      left={0}
-      right={0}
-      borderStyle="double"
-      borderColor="green"
-      paddingX={2}
-      paddingY={1}
-      flexDirection="column"
-    >
-      <Box>
-        <Text bold color="green">model switch — applies to new sessions (/new)</Text>
-      </Box>
-      {options.length === 0 && <Text dimColor>no models configured</Text>}
-      {options.map((option, row) => (
-        <Box key={`${option.provider}/${option.id}`}>
-          <Text color={row === clamped ? 'green' : 'gray'}>{row === clamped ? '› ' : '  '}</Text>
-          <Text color={row === clamped ? 'green' : undefined}>{`${option.provider} · ${option.name}`}</Text>
-          {option.id === current && <Text dimColor> (current)</Text>}
-        </Box>
-      ))}
+    <Box flexDirection="column" paddingLeft={1}>
+      <Text dimColor>model switch — applies to new sessions (/new) · ↑/↓ 选择 · Enter 应用 · Esc 关闭</Text>
+      <MenuList rows={rows} selected={clamped} width={columns} maxVisible={SELECTOR_MAX_VISIBLE} />
     </Box>
   )
 }

@@ -22,7 +22,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput, useWindowSize } from 'ink'
 import stringWidth from 'string-width'
 import type { TuiController } from './controller.js'
 import {
@@ -196,7 +196,6 @@ export function InputBox(props: {
   const cwdRef = useRef(controller.options.cwd)
   // The session walk is too costly per keystroke: list once, cache.
   const sessionsRef = useRef<ArgumentCandidate[] | null>(null)
-  const { stdout } = useStdout()
 
   // Injectable argument data for the completion engine. Rebuilt only when the
   // model actually changes (the "(current)" marker lives in the model rows).
@@ -255,7 +254,10 @@ export function InputBox(props: {
     void controller.submit(submitted)
   }
 
-  const ruleWidth = Math.max(0, stdout?.columns ?? 80)
+  // Live terminal width: re-renders on resize so the rules never keep a
+  // stale length (the "many stray dashes" bug).
+  const { columns: ruleWidthRaw } = useWindowSize()
+  const ruleWidth = Math.max(0, ruleWidthRaw)
   // The value `<Text>` content width: terminal columns minus the 1 col the
   // trailing cursor block can claim on a full line (pi reserves the same col
   // when the editor has no padding).

@@ -5,6 +5,31 @@ plugin. It mounts onto the official `dsh --profile tui` host plane
 (`dsh-base`) and composes the same agent world as the web profile, minus the
 browser transport. Agent Core is never modified to fit the UI.
 
+## Frame layout (resize-safe)
+
+The root frame is a Box fixed to the live terminal size (`useWindowSize`):
+
+```text
+history    flexGrow + overflow:hidden + justify:flex-end → bottom-anchored,
+           top-clipped; the rendered frame can NEVER exceed the terminal
+           height (Ink cannot erase taller frames — that was the resize tear)
+notice     transient notice line
+──────     input top rule
+input      the interface divider
+──────     input bottom rule
+dynamic    bounded zone BELOW the input: approvals/questions, session/model/
+zone       permission/preset selectors (plain borderless lists, window ≤ 8,
+           command menus ≤ 5) — grows/shrinks, shifting the input vertically
+status     pi-style dim footer (always last)
+```
+
+The whole block under the input is content-sized (`flexShrink: 0`), so it
+anchors to the bottom and the history area absorbs all slack. Content inside
+the clip area is also `flexShrink: 0` (ink boxes default to flexShrink 1 —
+without the wrapper, children squash into interleaved rows instead of
+clipping cleanly). All width/height math reads `useWindowSize`, so a resize
+re-renders with fresh dimensions (no stale-width rules).
+
 ## Boundary
 
 ```text

@@ -15,7 +15,7 @@
  */
 
 import type { JSX } from 'react'
-import { Box, Text, useStdout } from 'ink'
+import { Box, Text, useWindowSize } from 'ink'
 import stringWidth from 'string-width'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { TuiState } from '../events/reducer.js'
@@ -90,8 +90,9 @@ interface StatChunk {
 export function StatusBar(props: { state: TuiState; cwd: string; gitBranch: string }): JSX.Element {
   const { state, cwd, gitBranch } = props
   const now = useNow(1000)
-  const { stdout } = useStdout()
-  const width = Math.max(1, stdout?.columns ?? 80)
+  // Live width: re-renders on resize so truncation math never goes stale.
+  const { columns } = useWindowSize()
+  const width = Math.max(1, columns)
 
   // Line 1 — `~cwd (branch)` + session title, like pi's footer head.
   let pwdLine = formatCwdForFooter(cwd, process.env.HOME ?? process.env.USERPROFILE)

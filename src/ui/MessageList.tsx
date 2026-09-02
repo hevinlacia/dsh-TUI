@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Box, Text, useInput, useStdout } from 'ink'
+import { Box, Text, useInput, useWindowSize } from 'ink'
 import type { TuiState } from '../events/reducer.js'
 import { MessageItem } from './MessageItem.js'
 import { ToolCard } from './ToolCard.js'
@@ -27,9 +27,9 @@ export function MessageList(props: {
   const [offset, setOffset] = useState(0)
   const prevTotalRef = useRef(0)
   const prevUserRef = useRef(0)
-  const { stdout } = useStdout()
+  const { rows } = useWindowSize()
   // A "page" ≈ the visible chat height, bounded to something sane.
-  const page = Math.max(5, (stdout?.rows ?? 24) - 8)
+  const page = Math.max(5, rows - 8)
 
   const total = state.items.length
   // Slide the window over the WHOLE history: the 512-item render cap must not
