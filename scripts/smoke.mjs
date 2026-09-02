@@ -187,5 +187,17 @@ console.log('dsh-tui smoke')
   check('hint: no id → null', resumeHint(undefined, 'x') === null && resumeHint('', 'x') === null)
 }
 
+{
+  // Wheel speed gate: two notches per item step, direction flips reset
+  const { wheelAccumulator } = await import('../lib/ui/wheelSpeed.js')
+  const gate = wheelAccumulator()
+  check('wheel: first notch holds', gate('up') === false)
+  check('wheel: second notch steps', gate('up') === true)
+  check('wheel: pattern repeats', gate('up') === false && gate('up') === true)
+  check('wheel: flip resets leftover', gate('up') === false && gate('down') === false && gate('down') === true)
+  const fast = wheelAccumulator()
+  check('wheel: four notches = two steps', (fast('down') === false && fast('down') === true && fast('down') === false && fast('down') === true))
+}
+
 process.exitCode = failures === 0 ? 0 : 1
 console.log(failures === 0 ? 'smoke PASS' : `smoke FAIL (${failures})`)
