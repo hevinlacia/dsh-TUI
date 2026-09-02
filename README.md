@@ -110,6 +110,16 @@ durable logs. The profile patch re-points the root only when
 `/permission [mode]` `/preset [name]` `/commands` `/clear` `/exit` — plus
 `↑/↓` history, `Tab` completion, `t` thinking toggle.
 
+The input box follows pi's command interaction: typing `/` opens a dropdown
+that fuzzy-narrows commands (subsequence scoring; initial highlight = exact >
+prefix match), `/model `/`/permission `/`/preset `/`/resume ` each surface
+second-level argument candidates, and path-like tokens complete from the
+workspace. `↑/↓` move the (centered, wrapped) highlight, `Tab`/`Enter` apply
+the highlighted row — Enter also submits it (pi fall-through), while an empty
+argument query submits the bare command so `/model` opens the picker instead
+of switching to the first entry. `Esc` dismisses the menu. In chat context
+Enter always sends — a path menu never blocks submitting.
+
 - `/permission` (no arg) opens a picker for the three DSH sandbox levels
   (`read-only` / `workspace-write` / `danger-full-access`); full access also
   turns the approval policy off (`never`), the others stay `ask`.

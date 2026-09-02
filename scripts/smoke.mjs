@@ -4,7 +4,8 @@
  *
  * Covers, without any model call:
  *   1. command parsing (/help → command, plain → prompt)
- *   2. command + file completion (I1)
+ *   2. command + file completion (I1), pi-style fuzzy matching, and
+ *      second-level argument candidates (/preset co → /preset code)
  *   3. reducer + replay rendering of the rich fixture: tool cards (A1),
  *      thinking markers (A2), assistant/user messages (R2), status (R4)
  *   4. reducer + replay of the real error-path capture (graceful failure)
@@ -54,7 +55,27 @@ console.log('dsh-tui smoke')
   const pathResult = complete(pathInput, root)
   check('path completion finds candidates', pathResult.candidates.length > 0, `got ${pathResult.candidates.length}`)
   check('path completion completes the token', pathResult.completed.startsWith('src/'))
+  check('path item values carry the typed dir (highlight contract)', pathResult.items.every(item => item.value.startsWith('src/')))
+  const dotPath = complete('./', root)
+  check('dot-relative paths stay relative', dotPath.items.length > 0 && dotPath.items.every(item => item.value.startsWith('./')), JSON.stringify(dotPath.items.slice(0, 2)))
   check('commonPrefix(["abc","abd"]) === "ab"', commonPrefix(['abc', 'abd']) === 'ab')
+
+  // pi-style fuzzy: subsequence match, trailing-space apply line
+  const fuzzy = complete('/hlp', root)
+  check('fuzzy /hlp → /help', fuzzy.completed === '/help', fuzzy.completed)
+  check('fuzzy items carry trailing-space apply line', fuzzy.items[0]?.line === '/help ')
+
+  // pi-style argument candidates: /cmd <arg> second-level completion
+  const data = {
+    presets: [{ label: 'standard', value: 'standard' }, { label: 'code', value: 'code' }],
+  }
+  const argAll = complete('/preset ', root, data)
+  check('empty argument query lists all candidates', argAll.kind === 'argument' && argAll.items.length === 2, `got ${argAll.items.length}`)
+  const argNarrow = complete('/preset co', root, data)
+  check('argument /preset co → /preset code', argNarrow.completed === '/preset code', argNarrow.completed)
+  check('argument apply line carries the value', argNarrow.items[0]?.line === '/preset code')
+  const argUnknown = complete('/help x', root, data)
+  check('commands without argument data produce no candidates', argUnknown.items.length === 0)
 }
 
 // 3. rich fixture replay (R2/A1/A2/R4)

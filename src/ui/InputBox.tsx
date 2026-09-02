@@ -1,28 +1,45 @@
 /**
  * I1 — input box: a pi-style editor framed by two horizontal rules — no prompt
- * prefix, text starting at column 0, reverse-video block cursor — with history
- * (↑/↓ single-line, Ctrl+P/Ctrl+N always), Tab completion for
- * slash commands and file paths, a live slash-command dropdown that narrows as
- * you type, and a second-level option submenu for commands that take a choice
- * (e.g. `/model`).
+ * prefix, text starting at column 0, reverse-video block cursor — with pi-style
+ * command interaction:
  *
- * Multi-line: Shift+Enter inserts a newline; the caret moves freely in all four
- * directions (←/→ char, ↑/↓ between logical lines preserving column, Home/End
- * to the current line start/end). Up/Down fall back to history only on
- * single-line input, so the box both edits multi-line text and brows history.
+ * - a live dropdown that fuzzy-narrows commands as you type `/…` (subsequence
+ *   scoring, initial highlight = exact > prefix match),
+ * - second-level argument candidates after `/model `, `/permission `,
+ *   `/preset `, `/resume ` (Tab/Enter apply the highlighted row),
+ * - path candidates for path-like tokens, completed with Tab,
+ * - Enter on the slash menu applies the highlighted row and submits it
+ *   (pi fall-through); with an empty argument query it submits the bare
+ *   command so `/model` still opens the picker modal instead of switching to
+ *   the first list entry. In chat context (non-slash) Enter always submits —
+ *   a deliberate divergence from pi so a path menu never blocks sending.
+ *
+ * Multi-line: Shift+Enter inserts a newline; the caret moves freely in all
+ * four directions (←/→ char, ↑/↓ between visual lines preserving column,
+ * Home/End to the current line start/end). Up/Down fall back to history only
+ * on single-line input.
  * @module dsh-tui/ui/InputBox
  */
 
-import { useEffect, useRef, useState, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Box, Text, useInput, useStdout } from 'ink'
 import stringWidth from 'string-width'
 import type { TuiController } from './controller.js'
-import { complete, type CompletionResult } from '../completion.js'
-import { commandNames, COMMANDS } from '../commands.js'
-import { submenuEntries, type SubmenuEntry } from '../submenu.js'
+import {
+  complete,
+  type ArgumentCandidate,
+  type CompletionData,
+  type CompletionItem,
+  type CompletionResult,
+} from '../completion.js'
+import {
+  modelArgumentEntries,
+  permissionArgumentEntries,
+  presetArgumentEntries,
+  sessionArgumentEntries,
+} from '../args.js'
 import { palette } from './theme.js'
 import { CommandMenu } from './CommandMenu.js'
-import { ModelSubmenu } from './ModelSubmenu.js'
 
 const MAX_HISTORY = 64
 
@@ -142,11 +159,27 @@ function moveLineVisual(value: string, cursor: number, delta: -1 | 1, width: num
   return positionToCursor(rows, target, col)
 }
 
-/** Input box: editing, history, Tab completion, command menu + submenu. */
+/**
+ * Initial highlight for a fresh completion result (pi's
+ * getBestAutocompleteMatchIndex): exact value match wins, then the first
+ * prefix match, then row 0.
+ */
+function bestMatchIndex(items: CompletionItem[], query: string): number {
+  if (query === '') return 0
+  let firstPrefix = -1
+  for (let i = 0; i < items.length; i++) {
+    const value = items[i]!.value
+    if (value === query) return i
+    if (firstPrefix === -1 && value.startsWith(query)) firstPrefix = i
+  }
+  return firstPrefix === -1 ? 0 : firstPrefix
+}
+
+/** Input box: editing, history, pi-style completion menu. */
 export function InputBox(props: {
   controller: TuiController
   modalOpen: boolean
-  /** Current session model — used to mark "(current)" in the model submenu. */
+  /** Current session model — used to mark "(current)" in the model rows. */
   currentModel: string
   /** Whether the agent is mid-turn (Esc/Ctrl+C interrupt instead of clear/exit). */
   running: boolean
@@ -156,26 +189,41 @@ export function InputBox(props: {
   const { controller, modalOpen, currentModel, running, onToggleThinking } = props
   const [value, setValue] = useState('')
   const [cursor, setCursor] = useState(0)
-  const [completion, setCompletion] = useState<CompletionResult | undefined>(undefined)
   const [selected, setSelected] = useState(0)
   const [menuDismissed, setMenuDismissed] = useState(false)
-  const [submenu, setSubmenu] = useState<SubmenuEntry[] | null>(null)
-  const [submenuBase, setSubmenuBase] = useState<string | null>(null)
   const historyRef = useRef<string[]>([])
   const historyIndexRef = useRef(0)
   const cwdRef = useRef(controller.options.cwd)
+  // The session walk is too costly per keystroke: list once, cache.
+  const sessionsRef = useRef<ArgumentCandidate[] | null>(null)
   const { stdout } = useStdout()
 
-  // Live command matches for the current token (a command being typed, so far
-  // without a space). Narrowing is just a startWith filter over the vocabulary.
-  const typedCommand = value.startsWith('/') && !value.includes(' ') ? value.slice(1) : null
-  const matches = typedCommand === null ? [] : commandNames().filter(name => name.startsWith(typedCommand.toLowerCase()))
-  const showCommandMenu = submenu === null && matches.length > 0 && !menuDismissed
+  // Injectable argument data for the completion engine. Rebuilt only when the
+  // model actually changes (the "(current)" marker lives in the model rows).
+  const completionData = useMemo<CompletionData>(() => ({
+    models: modelArgumentEntries(controller.options, currentModel),
+    permissions: permissionArgumentEntries(),
+    presets: presetArgumentEntries(),
+    sessions: () => {
+      if (sessionsRef.current === null) {
+        sessionsRef.current = sessionArgumentEntries(controller.sessions())
+      }
+      return sessionsRef.current
+    },
+  }), [controller, currentModel])
 
-  // Whenever the filter narrows, snap the highlight back to the first row.
+  const result: CompletionResult = useMemo(
+    () => complete(value, cwdRef.current, completionData),
+    [value, completionData],
+  )
+  const inSlashContext = value.startsWith('/') && !value.includes('\n')
+  const items = result.items
+  const menuOpen = items.length > 0 && !menuDismissed
+
+  // Whenever the query changes, reset the highlight to the best match.
   useEffect(() => {
-    setSelected(0)
-  }, [typedCommand])
+    setSelected(bestMatchIndex(items, result.query))
+  }, [items, result.query])
 
   /** Set text and move the caret (defaults to the end). */
   const setText = (next: string, cursorPos: number = next.length): void => {
@@ -185,22 +233,26 @@ export function InputBox(props: {
 
   const applyText = (next: string): void => {
     setText(next)
-    setCompletion(undefined)
     setMenuDismissed(false)
   }
 
-  /** Fill the highlighted command into the box and close the menu. */
-  const acceptCommand = (name: string): void => {
-    setText(`/${name}`)
+  /** Apply one completion row into the box, then keep the menu closed until
+   * the next keystroke (avoids the same row instantly re-popping). */
+  const applyItem = (item: CompletionItem): void => {
+    setText(item.line, item.cursor)
     setMenuDismissed(true)
-    setSelected(0)
   }
 
-  /** Close the submenu and return to plain editing (input keeps its value). */
-  const closeSubmenu = (): void => {
-    setSubmenu(null)
-    setSubmenuBase(null)
-    setMenuDismissed(true)
+  /** Clear the box and submit one input line. */
+  const submitAndClear = (submitted: string): void => {
+    applyText('')
+    if (submitted.trim() !== '') {
+      const history = historyRef.current
+      if (history.at(-1) !== submitted) history.push(submitted)
+      if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY)
+      historyIndexRef.current = history.length
+    }
+    void controller.submit(submitted)
   }
 
   const ruleWidth = Math.max(0, stdout?.columns ?? 80)
@@ -224,77 +276,37 @@ export function InputBox(props: {
       return
     }
 
-    // Second-level option submenu (e.g. the model picker) owns the keyboard.
-    if (submenu !== null && submenuBase !== null) {
+    if (menuOpen) {
       if (key.upArrow) {
-        setSelected(sel => (sel - 1 + submenu.length) % submenu.length)
+        setSelected(sel => (sel - 1 + items.length) % items.length)
         return
       }
       if (key.downArrow) {
-        setSelected(sel => (sel + 1) % submenu.length)
-        return
-      }
-      if (key.escape) {
-        closeSubmenu()
-        return
-      }
-      const entry = submenu[clamp(selected, submenu.length)] ?? submenu[0]
-      if (entry !== undefined) {
-        const command = `${submenuBase} ${entry.value}`
-        if (key.return) {
-          // Confirm immediately: clear the box and run `/command <value>`.
-          applyText('')
-          closeSubmenu()
-          void controller.submit(command)
-          return
-        }
-        if (key.tab) {
-          // Fill the selection into the box (lets the user review/run with Enter).
-          applyText(command)
-          closeSubmenu()
-          return
-        }
-      }
-      return // swallow other input while the submenu is open
-    }
-
-    if (showCommandMenu && (key.return || key.tab || key.upArrow || key.downArrow || key.escape)) {
-      if (key.upArrow) {
-        setSelected(sel => (sel - 1 + matches.length) % matches.length)
-        return
-      }
-      if (key.downArrow) {
-        setSelected(sel => (sel + 1) % matches.length)
+        setSelected(sel => (sel + 1) % items.length)
         return
       }
       if (key.escape) {
         setMenuDismissed(true)
         return
       }
-      const name = matches[clamp(selected, matches.length)] ?? matches[0] ?? ''
-      if (name === '') return
-      const spec = COMMANDS.find(command => command.name === name)
-      if (spec?.submenu !== undefined) {
-        const entries = submenuEntries(spec.submenu, controller.options)
-        if (entries.length > 0) {
-          // Open the second-level menu instead of filling/running the command.
-          setText(`/${name}`)
-          setSubmenu(entries)
-          setSubmenuBase(`/${name}`)
-          setSelected(0)
-          setMenuDismissed(false)
-          return
-        }
-      }
-      if (key.return && value.trim() === `/${name}`) {
-        // The full command is already typed → run it.
-        const submitted = value
-        applyText('')
-        void controller.submit(submitted)
+      if (key.tab) {
+        applyItem(items[clamp(selected, items.length)] ?? items[0]!)
         return
       }
-      acceptCommand(name)
-      return
+      if (key.return && !key.shift && inSlashContext) {
+        // pi fall-through: apply the highlighted row and submit it. With an
+        // EMPTY argument query, submit the bare command instead so `/model`
+        // opens the picker rather than switching to the first list entry.
+        if (result.kind === 'argument' && result.query === '') {
+          submitAndClear(value)
+          return
+        }
+        submitAndClear((items[clamp(selected, items.length)] ?? items[0]!).line)
+        return
+      }
+      // Everything else — typing, backspace, Shift+Enter, and Enter in chat
+      // context (path menus never block sending) — falls through to the
+      // normal editing/submit handlers below.
     }
 
     if (key.return) {
@@ -302,27 +314,16 @@ export function InputBox(props: {
         // Shift+Enter inserts a newline instead of submitting — lets the box
         // hold multi-line text that the cursor can now move through.
         setText(value.slice(0, cursor) + '\n' + value.slice(cursor), cursor + 1)
-        setCompletion(undefined)
         setMenuDismissed(false)
         return
       }
-      const submitted = value
-      applyText('')
-      if (submitted.trim() !== '') {
-        const history = historyRef.current
-        if (history.at(-1) !== submitted) history.push(submitted)
-        if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY)
-        historyIndexRef.current = history.length
-        void controller.submit(submitted)
-      }
+      submitAndClear(value)
       return
     }
     if (key.tab) {
-      const result = complete(value, cwdRef.current)
-      if (result.candidates.length > 0) {
-        setText(result.completed)
-        setCompletion(result)
-      }
+      // No menu: fall back to the longest-common-prefix completion line.
+      if (result.completed !== value) setText(result.completed)
+      setMenuDismissed(false)
       return
     }
     if (key.upArrow) {
@@ -368,17 +369,13 @@ export function InputBox(props: {
       return
     }
     if (key.backspace) {
-      if (cursor > 0) {
-        setText(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1)
-        setCompletion(undefined)
-      }
+      if (cursor > 0) setText(value.slice(0, cursor - 1) + value.slice(cursor), cursor - 1)
       return
     }
     if (key.delete) {
       // Forward-delete at the caret (no-op at the end).
       if (cursor < value.length) {
         setText(value.slice(0, cursor) + value.slice(cursor + 1), cursor)
-        setCompletion(undefined)
       }
       return
     }
@@ -397,16 +394,13 @@ export function InputBox(props: {
     if (key.ctrl) return
     if (input !== '') {
       setText(value.slice(0, cursor) + input + value.slice(cursor), cursor + input.length)
-      setCompletion(undefined)
       setMenuDismissed(false)
     }
   })
 
   return (
     <Box flexDirection="column">
-      {submenu !== null && submenuBase !== null
-        ? <ModelSubmenu entries={submenu} currentModel={currentModel} selected={selected} />
-        : showCommandMenu && <CommandMenu matches={matches} selected={selected} />}
+      {menuOpen && <CommandMenu items={items} selected={selected} />}
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
       <Text>{value.slice(0, cursor)}<Text inverse>{cursor < value.length && value[cursor] !== '\n' ? value[cursor] : ' '}</Text>{value.slice(cursor + 1)}</Text>
       <Text color={palette.inputRule}>{'─'.repeat(ruleWidth)}</Text>
