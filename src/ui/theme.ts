@@ -21,6 +21,7 @@ export const palette = {
   thinkingLabel: 'magentaBright',
   thinkingText: 'gray',
   toolName: 'yellowBright',
+  toolBar: '#1f4429',
   toolOk: 'greenBright',
   toolRun: 'magentaBright',
   warning: 'yellowBright',
