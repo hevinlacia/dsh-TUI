@@ -39,6 +39,7 @@ import {
   type SessionId,
 } from './official.js'
 import { dshHome, loadDshSettings, loadTuiConfigFile, type CliOptions, type ModelOption } from './config.js'
+import { loadLastModel, saveLastModel } from './lastModel.js'
 import { approvalPolicyFor, DEFAULT_PERMISSION, permissionLabel, type PermissionMode } from './permission.js'
 import { DEFAULT_AGENT_PRESET, isAgentPreset, presetLabel, type AgentPreset } from './presets.js'
 import { parseInput } from './commands.js'
@@ -225,6 +226,8 @@ class InProcessController implements TuiController, CommandHost {
     // Apply to new sessions: update the compose default + the status line.
     this.defaultProvider = option.provider
     this.defaultModel = option.id
+    // Remember across restarts (best-effort UI-owned state).
+    saveLastModel(option.provider, option.id)
     this.apply({ type: 'context', provider: option.provider, model: option.id })
     this.apply({ type: 'notice', message: `model → ${option.id} (new sessions; /new to start one)` })
   }
@@ -603,19 +606,26 @@ function resolveDefaultPreset(config: Config): AgentPreset {
   return isAgentPreset(preset ?? '') ? (preset as AgentPreset) : DEFAULT_AGENT_PRESET
 }
 
-/** Build the controller's CliOptions from plugin config → config file → dsh settings. */
+/** Build the controller's CliOptions from plugin config → config file → last-used memory → dsh settings. */
 function controllerOptions(config: Config): CliOptions {
   const settings = loadDshSettings()
   const cfg = loadTuiConfigFile()
-  const provider = config.provider ?? cfg.provider ?? settings?.defaultProvider ?? 'deepseek-official'
-  const model = config.model ?? cfg.model ?? settings?.defaultModel ?? 'deepseek-v4-flash'
-  const modelOptions = settings?.modelOptions ?? [{ provider, id: model, name: model }]
-  const cwd = config.cwd ?? cfg.cwd ?? process.cwd()
+  const modelOptions = settings?.modelOptions ?? []
+  // UI-owned memory: the pair the user last switched to (still present in the
+  // options — a stale entry never resurrects a removed model). Sits below the
+  // explicit env/patch and the config-file pin, above the dsh settings default.
+  const memory = loadLastModel()
+  const remembered = memory !== null
+    && modelOptions.some(option => option.provider === memory.provider && option.id === memory.id)
+    ? memory
+    : null
+  const provider = config.provider ?? cfg.provider ?? remembered?.provider ?? settings?.defaultProvider ?? 'deepseek-official'
+  const model = config.model ?? cfg.model ?? remembered?.id ?? settings?.defaultModel ?? 'deepseek-v4-flash'
   return {
-    cwd,
+    cwd: config.cwd ?? cfg.cwd ?? process.cwd(),
     provider,
     model,
-    modelOptions,
+    modelOptions: modelOptions.length > 0 ? modelOptions : [{ provider, id: model, name: model }],
   }
 }
 
