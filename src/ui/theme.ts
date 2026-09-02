@@ -16,7 +16,6 @@ export const palette = {
   tip: 'gray',
   userBar: '#1c2536',
   userBorder: 'blueBright',
-  userPrefix: 'blueBright',
   assistantBullet: 'cyanBright',
   assistantName: 'cyanBright',
   thinkingLabel: 'magentaBright',

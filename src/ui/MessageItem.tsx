@@ -16,8 +16,10 @@ export function MessageItem(props: { item: ChatItem; thinkingOpen: boolean }): J
   if (item.kind === 'tool') return <></>
   if (item.kind === 'user') {
     return (
-      <Box backgroundColor={palette.userBar} paddingX={1} paddingY={0} width="100%">
-        <Text color={palette.userPrefix}>{'> '}</Text>
+      // The filled bar alone marks the message as the user's — no `>` prefix.
+      // paddingY 1 (one blank row above and below the text) breathes better
+      // than a tight single-line bar.
+      <Box backgroundColor={palette.userBar} paddingX={1} paddingY={1} width="100%">
         <Text wrap="wrap">{item.text}</Text>
       </Box>
     )
