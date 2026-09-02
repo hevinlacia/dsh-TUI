@@ -24,8 +24,10 @@ export interface TuiController {
   getState(): Store<TuiState>
   /** Local git branch for the workspace cwd ('' when not a repo). */
   gitBranch(): string
-  /** Named sessions for the browser. */
+  /** Named sessions for the browser (last completed scan). */
   sessions(): SessionMeta[]
+  /** Scan the durable store off the render path (dedupes in-flight scans). */
+  loadSessions(): Promise<SessionMeta[]>
   /** Submit one input line (slash command or prompt). */
   submit(input: string): Promise<boolean>
   /** Resume an existing session id. */

@@ -42,7 +42,6 @@
     "check": "pnpm run build && pnpm run smoke"
   },
   "dependencies": {
-    "fzstd": "^0.1.1",
     "ink": "^7.1.1",
     "react": "^19.2.0",
     "string-width": "^8.2.2",

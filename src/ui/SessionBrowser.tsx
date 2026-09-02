@@ -5,7 +5,7 @@
  * @module dsh-tui/ui/SessionBrowser
  */
 
-import { useState, type JSX } from 'react'
+import { useState, useEffect, type JSX } from 'react'
 import { Box, Text, useInput, useWindowSize } from 'ink'
 import stringWidth from 'string-width'
 import type { SessionMeta } from '../sessions.js'
@@ -43,14 +43,30 @@ export function formatRelative(ms: number): string {
   return `${days}d ago`
 }
 
-/** Selector listing sessions from the shared durable store. */
+/** Selector listing sessions from the shared durable store. The scan runs
+ * off the render path — the caller injects a `load` promise; until it lands
+ * the selector shows a progress line instead of freezing the UI. */
 export function SessionBrowser(props: {
-  sessions: SessionMeta[]
+  load: () => Promise<SessionMeta[]>
   onSelect: (id: string) => void
   onClose: () => void
 }): JSX.Element {
-  const { sessions, onSelect, onClose } = props
+  const { load, onSelect, onClose } = props
   const { columns } = useWindowSize()
+  const [sessions, setSessions] = useState<SessionMeta[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let alive = true
+    void load().then(result => {
+      if (alive) {
+        setSessions(result)
+        setLoading(false)
+      }
+    })
+    return () => {
+      alive = false
+    }
+  }, [load])
   const [index, setIndex] = useState(0)
   const total = sessions.length
   const clamped = total === 0 ? 0 : ((index % total) + total) % total
@@ -79,7 +95,7 @@ export function SessionBrowser(props: {
 
   return (
     <Box flexDirection="column" paddingLeft={1}>
-      <Text dimColor>{`sessions — ${total} 条 · ↑/↓ 选择 · PgUp/PgDn 翻页 · Enter 恢复 · Esc 关闭`}</Text>
+      <Text dimColor>{`sessions — ${loading ? '扫描中…' : `${total} 条`} · ↑/↓ 选择 · PgUp/PgDn 翻页 · Enter 恢复 · Esc 关闭`}</Text>
       {total === 0
         ? <Text dimColor>no sessions yet — send your first message</Text>
         : <MenuList rows={rows} selected={clamped} width={columns} maxVisible={SELECTOR_MAX_VISIBLE} />}
