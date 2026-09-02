@@ -265,9 +265,10 @@ export function InputBox(props: {
 
   useInput((input, key) => {
     if (modalOpen) return // modals own the keyboard while open
-    // Mouse-wheel bytes (DECSET 1000/1006 SGR sequences, see useMouseWheel)
-    // leak through Ink's keypress parser as '[<64;…' garbage — never text.
-    if (input.startsWith('[<') || input.startsWith('[M')) return
+    // Terminal-encoded keys leak through Ink's keypress parser as bracketed
+    // leftovers — mouse SGR (`[<64;…`, `[M…`) and kitty CSI-u functional keys
+    // (`[5u` = PageUp) are never text (see pageKeys.ts).
+    if (/^\[(<|M|\d)/.test(input)) return
     if (key.ctrl && input === 'c') {
       if (running) {
         controller.interrupt()

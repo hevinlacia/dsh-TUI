@@ -15,6 +15,7 @@ import type { TuiState } from '../events/reducer.js'
 import { MessageItem } from './MessageItem.js'
 import { ToolCard } from './ToolCard.js'
 import { useMouseWheel } from './useMouseWheel.js'
+import { matchPageKey } from './pageKeys.js'
 
 /** Render-window size; offset can slide the window over the whole history. */
 const TAIL_WINDOW = 512
@@ -67,12 +68,13 @@ export function MessageList(props: {
   const onWheel = useCallback((direction: 'up' | 'down'): void => { wheelRef.current(direction) }, [])
   useMouseWheel(onWheel)
 
-  useInput((_input, key) => {
-    if (key.pageUp) {
+  useInput((input, key) => {
+    const pageKey = matchPageKey(input, key)
+    if (pageKey === 'up') {
       setOffset(value => Math.min(maxOffset, value + page))
       return
     }
-    if (key.pageDown) {
+    if (pageKey === 'down') {
       setOffset(value => Math.max(0, value - page))
     }
   }, { isActive: scrollActive })

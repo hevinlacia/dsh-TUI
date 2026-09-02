@@ -163,5 +163,19 @@ console.log('dsh-tui smoke')
   fs.rmSync(dir, { recursive: true, force: true })
 }
 
+{
+  // Page-key matching across terminal encodings (legacy tilde vs kitty CSI-u)
+  const { matchPageKey } = await import('../lib/ui/pageKeys.js')
+  const noKey = { pageUp: false, pageDown: false }
+  check('pageKey: legacy key.pageUp', matchPageKey('', { pageUp: true }) === 'up')
+  check('pageKey: legacy key.pageDown', matchPageKey('', { pageDown: true }) === 'down')
+  check('pageKey: kitty CSI-u pageup', matchPageKey('[5u', noKey) === 'up')
+  check('pageKey: kitty CSI-u pagedown', matchPageKey('[6u', noKey) === 'down')
+  check('pageKey: kitty CSI-u with modifiers', matchPageKey('[5;5u', noKey) === 'up' && matchPageKey('[6;2u', noKey) === 'down')
+  check('pageKey: mouse bytes never page', matchPageKey('[<64;10;5M', noKey) === null && matchPageKey('[M#', noKey) === null)
+  check('pageKey: plain text is null', matchPageKey('a', noKey) === null && matchPageKey('[', noKey) === null && matchPageKey('[5x', noKey) === null)
+  check('pageKey: unmatched key flags null', matchPageKey('x', { pageUp: false, pageDown: false, escape: true }) === null)
+}
+
 process.exitCode = failures === 0 ? 0 : 1
 console.log(failures === 0 ? 'smoke PASS' : `smoke FAIL (${failures})`)

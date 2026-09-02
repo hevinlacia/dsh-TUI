@@ -152,7 +152,8 @@ durable logs. The profile patch re-points the root only when
 The mouse wheel scrolls the in-app history at any time — including WHILE the
 model is streaming: reviewing holds the visible items still (new output
 lands below without yanking the view), a new submitted message snaps back to
-the tail, and `PageUp`/`PageDown` page as before. This uses the terminal's
+the tail, and `PageUp`/`PageDown` page a screen at a time (both the legacy
+`CSI 5~` and the kitty `CSI 5u` encodings Ghostty may send are matched). This uses the terminal's
 SGR mouse reporting (DECSET 1000/1006), which Ghostty/kitty/WezTerm/xterm
 all support.
 
