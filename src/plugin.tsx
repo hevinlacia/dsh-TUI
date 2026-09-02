@@ -54,7 +54,7 @@ import type { TuiController, InteractionDecision } from './ui/controller.js'
 
 export const name = 'dsh-tui'
 /** Agent registry, user-question, approval + harness command services the TUI drives. */
-export const inject = ['agents', 'userQuestions', 'approval', 'commands', 'agentPresets']
+export const inject = ['agents', 'userQuestions', 'approval', 'commands', 'agentPresets', 'sessionTitle']
 
 /**
  * Read the last `session/title` event's title from a compressed session log.
@@ -88,6 +88,8 @@ export interface Config {
   cwd?: string
   preset?: string
   sessionId?: string
+  /** Explicit session title — pins it (no automatic title generation). */
+  name?: string
 }
 
 /** Cordis schemastery schema for {@link Config}. */
@@ -97,6 +99,7 @@ export const Config: Schema<Config> = Schema.object({
   cwd: Schema.string().required(false),
   preset: Schema.string().required(false),
   sessionId: Schema.string().required(false),
+  name: Schema.string().required(false),
 })
 
 /** UI-only callbacks the controller drives (modal open / exit). */
@@ -124,6 +127,10 @@ class InProcessController implements TuiController, CommandHost {
   private defaultPreset: string
   /** Last agent-presets roster snapshot (shipped four until the first list). */
   private presetsCache: readonly PresetInfo[] | undefined
+  /** Extra system-prompt text appended to every session this TUI composes
+   * (from `--append-system-prompt`); registered on the agent-scoped setup ctx
+   * so it unwinds with the agent. */
+  attachedPrompt: string | undefined
   /** Monotonic id for pending model-facing interactions (approval/question). */
   private interactionSeq = 0
   /** Pending interaction resolvers, keyed by seq (the agent blocks one at a time). */
@@ -316,11 +323,11 @@ class InProcessController implements TuiController, CommandHost {
   }
 
   /** Start a fresh session with the current model default. */
-  async newSession(): Promise<void> {
-    const id = `session-${randomPart()}` as SessionId
+  async newSession(id?: string): Promise<void> {
+    const sessionId = (id ?? `session-${randomPart()}`) as SessionId
     try {
-      await this.attach({ sessionId: id })
-      this.apply({ type: 'notice', message: `new session ${String(id)}` })
+      await this.attach({ sessionId })
+      this.apply({ type: 'notice', message: `new session ${String(sessionId)}` })
     } catch (error) {
       this.apply({ type: 'error', message: errMsg(error) })
     }
@@ -439,6 +446,11 @@ class InProcessController implements TuiController, CommandHost {
     const setup = async (ctx: Context): Promise<void> => {
       const preset = this.currentPreset()
       await this.ctx.agentPresets!.mount(ctx, preset)
+      // The launcher's --append-system-prompt payload: an agent-scoped
+      // section after the persona (order 50 < tool guidance 100–199).
+      if (this.attachedPrompt !== undefined) {
+        ctx.systemPrompt.section({ name: 'session-context', order: 50, text: this.attachedPrompt })
+      }
     }
     if ('resumeSessionId' in options) {
       return this.ctx.agents.resume({ resumeSessionId: options.resumeSessionId, setup })
@@ -449,6 +461,28 @@ class InProcessController implements TuiController, CommandHost {
       agentOptions,
       setup,
     })
+  }
+
+  /** Rename the live session (pins the title; automatic generation stops). */
+  async renameSession(title: string): Promise<void> {
+    const handle = this.handle
+    if (handle === undefined) {
+      this.apply({ type: 'error', message: 'no live session to rename' })
+      return
+    }
+    try {
+      this.ctx.sessionTitle?.rename(handle.agent.session, title)
+      // The session/title event echoes through the feed and updates the
+      // status bar; the notice confirms the accepted input immediately.
+      this.apply({ type: 'notice', message: `name → ${title}` })
+    } catch (error) {
+      this.apply({ type: 'error', message: errMsg(error) })
+    }
+  }
+
+  /** The current session title ('' before the first title event). */
+  currentTitle(): string {
+    return this.store.getState().title
   }
 
   /** Project an official session event into the store (filtered to the live session). */
@@ -660,18 +694,33 @@ function controllerOptions(config: Config): CliOptions {
   }
 }
 
+/** A non-empty trimmed env string, or undefined. */
+function envText(name: string): string | undefined {
+  const value = process.env[name]?.trim()
+  return value !== undefined && value !== '' ? value : undefined
+}
+
 /**
  * Start the in-process TUI. Creates/resumes an agent, subscribes to session
  * events, renders the App, and resolves when the TUI teardown completes.
+ *
+ * pi-parity launch bindings (config fields or env, set by the launcher):
+ * `sessionId` / `DSH_TUI_SESSION_ID` — resume the id when known, else create
+ * with it (external tools can pre-bind the id); `name` / `DSH_TUI_NAME` —
+ * pin the session title; `DSH_TUI_APPEND_SYSTEM_PROMPT` — a (`@`-prefixed)
+ * file whose text joins every session's system prompt.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const options = controllerOptions(config)
-  const initialId = config.sessionId ?? `session-${Date.now().toString(36)}`
+  const requestedId = config.sessionId ?? envText('DSH_TUI_SESSION_ID')
+  const requestedName = config.name ?? envText('DSH_TUI_NAME')
+  const initialId = requestedId ?? `session-${Date.now().toString(36)}`
   const store = new Store<TuiState>(initialState(initialId))
   const modalRef: { current: ((modal: Modal) => void) | undefined } = { current: undefined }
 
   let app: { unmount: () => void } | undefined
   let exitResolve: () => void = () => {}
+  let promptNotice: string | undefined
   const exitPromise = new Promise<void>(resolveExit => { exitResolve = resolveExit })
 
   const controller = new InProcessController(
@@ -697,6 +746,21 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     resolveDefaultPreset(config),
   )
 
+  // `--append-system-prompt <@path>`: read once up front; an unreadable file
+  // only degrades to a notice (the session still boots).
+  const promptPath = envText('DSH_TUI_APPEND_SYSTEM_PROMPT')?.replace(/^@/, '')
+  if (promptPath !== undefined) {
+    try {
+      const text = readFileSync(promptPath, 'utf8').trim()
+      if (text !== '') controller.attachedPrompt = text
+      else controller.attachedPrompt = undefined
+    } catch {
+      // Deferred: apply notices after the first attach (store not rendering yet).
+      controller.attachedPrompt = undefined
+      promptNotice = `append-system-prompt: cannot read ${promptPath}`
+    }
+  }
+
   /** Root owns modal state and mirrors the setter into the controller hook. */
   function Root(): JSX.Element {
     const [modal, setModal] = useState<Modal>('none')
@@ -708,8 +772,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   app = render(<Root />)
 
   try {
-    if (config.sessionId !== undefined) {
-      await controller.resumeSession(config.sessionId)
+    if (requestedId !== undefined) {
+      // pi `--session-id` semantics: resume the id when it exists, else
+      // create with it (external tools can pre-bind the id).
+      const known = controller.sessions().some(session => session.id === requestedId)
+      if (known) await controller.resumeSession(requestedId)
+      else await controller.newSession(requestedId)
     } else {
       await controller.newSession()
     }
@@ -717,5 +785,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     // The store already carries the disconnected/error state; keep the UI alive.
     void error
   }
+  if (requestedName !== undefined) await controller.renameSession(requestedName)
+  if (promptNotice !== undefined) controller.apply({ type: 'notice', message: promptNotice })
   return exitPromise
 }

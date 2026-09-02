@@ -104,6 +104,18 @@ console.log('dsh-tui smoke')
   const launcher = spawnSync(process.execPath, [bin, '--dry-run', 'hello'], { encoding: 'utf8' })
   check('launcher dry-run exits 0', launcher.status === 0, `status ${launcher.status}`)
   check('launcher dry-run prints spawn dsh', /^spawn dsh --profile /m.test(launcher.stdout), launcher.stdout)
+  // pi-parity session bindings must be consumed by the launcher (env), never
+  // leaked into the dsh boot args.
+  const bound = spawnSync(process.execPath, [bin, '--dry-run', '--session-id', 'session-abc', '--name', '订单回退修复', '--append-system-prompt', '@/tmp/ctx.md'], { encoding: 'utf8' })
+  check('session-binding flags exit 0', bound.status === 0, `status ${bound.status}`)
+  check('binding flags stay out of boot args', bound.stdout.startsWith('spawn dsh --profile tui '), bound.stdout.trim())
+}
+
+// 5b. /name command surfaces in the vocabulary
+{
+  const { COMMANDS } = await import(join(root, 'lib/commands.js'))
+  const nameSpec = COMMANDS.find(command => command.name === 'name')
+  check('/name in command vocabulary', nameSpec !== undefined && nameSpec.usage === '/name [title]', JSON.stringify(nameSpec))
 }
 
 // 6. model + preset memory round-trip (keyless, isolated via DSH_TUI_HOME)

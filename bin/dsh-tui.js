@@ -7,6 +7,9 @@
  *   dsh-tui                            # boot profile $DSH_TUI_PROFILE ?? 'tui'
  *   dsh-tui --profile <name>           # boot a specific profile
  *   dsh-tui --dry-run                  # print the boot command, don't run
+ *   dsh-tui --session-id <id>          # resume the id when known, else create with it
+ *   dsh-tui --name <title>             # pin the session title (pi --name)
+ *   dsh-tui --append-system-prompt @f  # append a file's text to the system prompt
  *   dsh-tui [task...]                  # pass a one-shot task to the harness
  *
  * The first run auto-creates the profile by installing THIS package into it
@@ -27,6 +30,8 @@ let profile = process.env.DSH_TUI_PROFILE ?? 'tui'
 let dryRun = false
 const passthrough = []
 
+// pi-parity session bindings, forwarded to the plugin via env (the plugin
+// reads DSH_TUI_SESSION_ID / DSH_TUI_NAME / DSH_TUI_APPEND_SYSTEM_PROMPT).
 for (let i = 2; i < process.argv.length; i += 1) {
   const arg = process.argv[i]
   if (arg === '--dry-run') {
@@ -35,6 +40,24 @@ for (let i = 2; i < process.argv.length; i += 1) {
     const next = process.argv[i + 1]
     if (next !== undefined && !next.startsWith('-')) {
       profile = next
+      i += 1
+    }
+  } else if (arg === '--session-id') {
+    const next = process.argv[i + 1]
+    if (next !== undefined) {
+      process.env.DSH_TUI_SESSION_ID = next
+      i += 1
+    }
+  } else if (arg === '--name') {
+    const next = process.argv[i + 1]
+    if (next !== undefined) {
+      process.env.DSH_TUI_NAME = next
+      i += 1
+    }
+  } else if (arg === '--append-system-prompt') {
+    const next = process.argv[i + 1]
+    if (next !== undefined) {
+      process.env.DSH_TUI_APPEND_SYSTEM_PROMPT = next
       i += 1
     }
   } else {

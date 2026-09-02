@@ -20,6 +20,7 @@ export const COMMANDS: readonly CommandSpec[] = [
   { name: 'status', usage: '/status', description: 'show session/connection/model info' },
   { name: 'context', usage: '/context', description: 'show turns, steps, todos, last usage' },
   { name: 'new', usage: '/new', description: 'start a fresh session' },
+  { name: 'name', usage: '/name [title]', description: 'rename the session (pins the title)' },
   { name: 'resume', usage: '/resume [id]', description: 'resume a session (opens browser without id)' },
   { name: 'sessions', usage: '/sessions', description: 'browse and resume past sessions' },
   { name: 'model', usage: '/model [name]', description: 'show or switch the model for new sessions' },

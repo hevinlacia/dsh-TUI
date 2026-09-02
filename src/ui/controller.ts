@@ -30,6 +30,10 @@ export interface TuiController {
   submit(input: string): Promise<boolean>
   /** Resume an existing session id. */
   resumeSession(id: string): void
+  /** Rename the live session (pins the title; automatic generation stops). */
+  renameSession(title: string): Promise<void>
+  /** The current session title ('' before the first title event). */
+  currentTitle(): string
   /** Switch the model (and its provider) for new sessions. */
   switchModel(option: ModelOption): Promise<void>
   /** The session's current effective permission mode. */
