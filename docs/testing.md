@@ -9,7 +9,9 @@ pnpm check
 `pnpm check` = `pnpm build` + `node scripts/smoke.mjs`. It needs no API key and
 no runtime subprocess. It covers:
 
-- command parsing and completion engine (`/help` → command, `src/…` → files)
+- command parsing and completion engine (`/help` → command, `src/` → files,
+  pi-style fuzzy `/hlp` → `/help`, argument candidates `/preset co` →
+  `/preset code`)
 - reducer + replay of `fixtures/sample-conversation.jsonl` (rich conversation
   with thinking stream, bash tool cards, usage, two turns) — asserts the A1
   tool-card shape, A2 thinking markers, R2 chat lines, and R4 status line
