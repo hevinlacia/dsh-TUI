@@ -14,11 +14,13 @@
  * @module dsh-tui/plugin
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { decompress } from 'fzstd'
 import { join } from 'node:path'
 import React, { useState, type JSX } from 'react'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 import { render } from 'ink'
 import {
   createUserMessage,
@@ -60,20 +62,39 @@ export const inject = ['agents', 'userQuestions', 'approval', 'commands', 'agent
  * Read the last `session/title` event's title from a compressed session log.
  * Returns '' when the file is missing, undecodable, or has no title yet.
  */
-function readSessionTitle(file: string): string {
+/**
+ * Latest-wins `session/title` from one durable session log — WITHOUT parsing
+ * every line. The log is APPEND-CONCATENATED zstd frames (dsh re-opens a new
+ * frame per flush), which rules out `zlib.zstdDecompressSync` (first frame
+ * only, then `ZSTD_error_prefix_unknown`) and fzstd (correct but pure-JS at
+ * ~2.5MB/s — a 122-session/80MB store took 31s on the main thread). The
+ * system zstd CLI streams all frames natively in a SUBPROCESS, keeping the
+ * event loop free. Title lines are located by a Buffer needle and only those
+ * lines hit `JSON.parse` (a title TEXT containing the needle still gets
+ * validated against the event type, so false hits are discarded). A missing
+ * zstd binary or corrupt log degrades to "untitled" — the browser still
+ * lists the session.
+ */
+async function readSessionTitle(file: string): Promise<string> {
   try {
-    const text = Buffer.from(decompress(readFileSync(file))).toString('utf8')
+    const { stdout } = await execFileAsync('zstd', ['-d', '-c', file], { maxBuffer: 1 << 28, encoding: 'buffer' })
+    const buf = Buffer.from(stdout)
+    const NEEDLE = Buffer.from('"type":"session/title"')
     let title = ''
-    for (const line of text.split('\n')) {
-      if (line === '') continue
+    let idx = buf.indexOf(NEEDLE)
+    while (idx !== -1) {
+      const start = buf.lastIndexOf(0x0a, idx) + 1
+      let end = buf.indexOf(0x0a, idx)
+      if (end === -1) end = buf.length
       try {
-        const event = JSON.parse(line) as { type?: string; data?: { title?: unknown } }
+        const event = JSON.parse(buf.slice(start, end).toString('utf8')) as { type?: unknown; data?: { title?: unknown } }
         if (event.type === 'session/title' && typeof event.data?.title === 'string' && event.data.title !== '') {
           title = event.data.title
         }
       } catch {
         // Skip a malformed line.
       }
+      idx = buf.indexOf(NEEDLE, end)
     }
     return title
   } catch {
@@ -125,6 +146,10 @@ class InProcessController implements TuiController, CommandHost {
   private defaultProvider: string
   private defaultModel: string
   private defaultPreset: string
+  /** Last completed store scan; empty until the first loadSessions lands. */
+  private sessionsCache: SessionMeta[] = []
+  /** In-flight scan (loadSessions dedupe). */
+  private sessionsScan: Promise<SessionMeta[]> | undefined
   /** Last agent-presets roster snapshot (shipped four until the first list). */
   private presetsCache: readonly PresetInfo[] | undefined
   /** Extra system-prompt text appended to every session this TUI composes
@@ -179,9 +204,26 @@ class InProcessController implements TuiController, CommandHost {
   }
 
   sessions(): SessionMeta[] {
-    // Phase 1.5: list durable sessions from the shared storage layout (ids +
-    // timestamps). Titles need zstd log decompression, so leave them empty.
-    return this.listPersistedSessions()
+    // The last completed scan (sync, for completions and browsers). kicked
+    // off at App mount and refreshed after each attach — NEVER scan here:
+    // even at native speed a cold scan is 100+ log decompressions.
+    return this.sessionsCache
+  }
+
+  /** Scan the durable store off the render path, deduping in-flight scans.
+   * Each file decompresses between an event-loop yield, so the UI keeps
+   * painting while the walk progresses. */
+  loadSessions(): Promise<SessionMeta[]> {
+    if (this.sessionsScan !== undefined) return this.sessionsScan
+    this.sessionsScan = scanPersistedSessions()
+      .then(results => {
+        this.sessionsCache = results
+        return results
+      })
+      .finally(() => {
+        this.sessionsScan = undefined
+      })
+    return this.sessionsScan
   }
 
   /** Submit one input line: slash command or prompt. */
@@ -218,7 +260,7 @@ class InProcessController implements TuiController, CommandHost {
   /** Resume an existing session id through the official agent factory. */
   async resumeSession(id: string): Promise<void> {
     try {
-      const resolved = this.resolveSessionId(id)
+      const resolved = await this.resolveSessionId(id)
       await this.attach({ resumeSessionId: resolved as SessionId })
       this.apply({ type: 'notice', message: `resumed ${resolved}` })
     } catch (error) {
@@ -356,10 +398,10 @@ class InProcessController implements TuiController, CommandHost {
   }
 
   /** Expand a `/resume` argument to a real session id (exact → prefix scan). */
-  private resolveSessionId(input: string): string {
+  private async resolveSessionId(input: string): Promise<string> {
     const trimmed = input.trim()
     if (trimmed === '') return trimmed
-    const matches = this.listPersistedSessions()
+    const matches = (await this.loadSessions())
       .filter(entry => entry.id.startsWith(trimmed))
       .map(entry => entry.id)
     if (matches.length === 1) return matches[0]!
@@ -368,43 +410,6 @@ class InProcessController implements TuiController, CommandHost {
   }
 
   /** Enumerate durable session dirs under the shared storage root (newest first). */
-  private listPersistedSessions(): SessionMeta[] {
-    const root = join(dshHome(), 'sessions')
-    const results: SessionMeta[] = []
-    const walk = (dir: string, depth: number): void => {
-      if (depth > 3) return
-      let entries: { name: string; isDirectory(): boolean }[] = []
-      try {
-        entries = readdirSync(dir, { withFileTypes: true })
-      } catch {
-        return
-      }
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue
-        const full = join(dir, entry.name)
-        // `--<cwd-slug>--` are grouping dirs; recurse into them, skip as ids.
-        if (entry.name.startsWith('--')) {
-          walk(full, depth + 1)
-          continue
-        }
-        try {
-          const stat = statSync(full)
-          results.push({
-            id: entry.name,
-            title: readSessionTitle(join(full, 'session.jsonl.zstd')),
-            createdAt: stat.birthtimeMs,
-            updatedAt: stat.mtimeMs,
-            messageCount: 0,
-          })
-        } catch {
-          // Unreadable entry (e.g. a stray file); skip it.
-        }
-      }
-    }
-    walk(root, 0)
-    return results.sort((a, b) => b.updatedAt - a.updatedAt)
-  }
-
   /** Create/resume an agent and (re)point the store at its session. */
   private async attach(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<void> {
     const previous = this.handle
@@ -435,6 +440,9 @@ class InProcessController implements TuiController, CommandHost {
     // `eventsFor` maps `sandbox/mode` too, but set it explicitly so a session
     // with no override still shows the deployment default.
     this.apply({ type: 'permission', mode: this.currentPermission() })
+    // Refresh the store cache in the background (the new/resumed session's
+    // title lands for the browser + completions).
+    void this.loadSessions()
   }
 
   private async createOrResume(options: { sessionId: SessionId } | { resumeSessionId: SessionId }): Promise<AgentHandle> {
@@ -726,6 +734,55 @@ function hasPersistedSession(id: string): boolean {
     return false
   }
   return walk(root, 0)
+}
+
+/**
+ * Walk the durable store collecting session metas off the render path.
+ * Each log's title extraction runs in a zstd subprocess (see
+ * readSessionTitle) and is awaited per file — the event loop stays free to
+ * paint while the walk progresses. Replaces the old sync
+ * listPersistedSessions, whose fzstd inflate + per-line JSON.parse blocked
+ * the UI for ~30s on a 124-session/80MB store.
+ */
+async function scanPersistedSessions(): Promise<SessionMeta[]> {
+  const root = join(dshHome(), 'sessions')
+  const files: Array<{ id: string; file: string; birthtimeMs: number; mtimeMs: number }> = []
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 3) return
+    let entries: { name: string; isDirectory(): boolean }[] = []
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const full = join(dir, entry.name)
+      // `--<cwd-slug>--` are grouping dirs; recurse into them, skip as ids.
+      if (entry.name.startsWith('--')) {
+        walk(full, depth + 1)
+        continue
+      }
+      try {
+        const stat = statSync(full)
+        files.push({ id: entry.name, file: join(full, 'session.jsonl.zstd'), birthtimeMs: stat.birthtimeMs, mtimeMs: stat.mtimeMs })
+      } catch {
+        // Unreadable entry (e.g. a stray file); skip it.
+      }
+    }
+  }
+  walk(root, 0)
+  const results: SessionMeta[] = []
+  for (const entry of files) {
+    results.push({
+      id: entry.id,
+      title: await readSessionTitle(entry.file),
+      createdAt: entry.birthtimeMs,
+      updatedAt: entry.mtimeMs,
+      messageCount: 0,
+    })
+  }
+  return results.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 /**

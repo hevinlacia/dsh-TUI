@@ -197,22 +197,18 @@ export function InputBox(props: {
   const historyRef = useRef<string[]>([])
   const historyIndexRef = useRef(0)
   const cwdRef = useRef(controller.options.cwd)
-  // The session walk is too costly per keystroke: list once, cache.
-  const sessionsRef = useRef<ArgumentCandidate[] | null>(null)
 
   // Injectable argument data for the completion engine. Rebuilt when the
   // model or the preset roster changes (the "(current)" marker lives in the
   // model rows; the preset candidates carry descriptions from the roster).
+  // Session candidates map the controller's cache snapshot on each
+  // completion pass — the cache is warmed at App mount and refreshed after
+  // every attach, never scanned synchronously here.
   const completionData = useMemo<CompletionData>(() => ({
     models: modelArgumentEntries(controller.options, currentModel),
     permissions: permissionArgumentEntries(),
     presets: presetArgumentEntries(presets),
-    sessions: () => {
-      if (sessionsRef.current === null) {
-        sessionsRef.current = sessionArgumentEntries(controller.sessions())
-      }
-      return sessionsRef.current
-    },
+    sessions: () => sessionArgumentEntries(controller.sessions()),
   }), [controller, currentModel, presets])
 
   const result: CompletionResult = useMemo(

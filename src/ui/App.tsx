@@ -65,6 +65,11 @@ export function App(props: {
       alive = false
     }
   }, [controller])
+  // Warm the session-store cache off the render path (browser + /resume
+  // completions read the sync snapshot).
+  useEffect(() => {
+    void controller.loadSessions()
+  }, [controller])
 
   return (
     <Box flexDirection="column" width={columns} height={rows}>
@@ -106,7 +111,7 @@ export function App(props: {
         {pending !== undefined && <InteractionView interaction={pending} controller={controller} />}
         {modal === 'sessions' && (
           <SessionBrowser
-            sessions={controller.sessions()}
+            load={() => controller.loadSessions()}
             onSelect={id => {
               controller.resumeSession(id)
               setModal('none')
