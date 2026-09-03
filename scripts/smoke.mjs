@@ -199,5 +199,15 @@ console.log('dsh-tui smoke')
   check('wheel: four notches = two steps', (fast('down') === false && fast('down') === true && fast('down') === false && fast('down') === true))
 }
 
+{
+  // Bracketed terminal leftovers (kitty query replies, mouse, CSI-u) vs text
+  const { isBracketLeftover } = await import('../lib/ui/pageKeys.js')
+  check('leftover: kitty query reply dropped', isBracketLeftover('[?0u') === true && isBracketLeftover('[?1u') === true)
+  check('leftover: mouse bytes dropped', isBracketLeftover('[<64;10;5M') === true && isBracketLeftover('[M#') === true)
+  check('leftover: CSI-u/DSR dropped', isBracketLeftover('[5u') === true && isBracketLeftover('[5;2u') === true && isBracketLeftover('[0n') === true)
+  check('leftover: typed text passes', isBracketLeftover('[') === false && isBracketLeftover('[5x') === false && isBracketLeftover('hello') === false)
+  check('leftover: paste starting with bracket passes', isBracketLeftover('[1mhello') === false && isBracketLeftover('[foo bar]') === false)
+}
+
 process.exitCode = failures === 0 ? 0 : 1
 console.log(failures === 0 ? 'smoke PASS' : `smoke FAIL (${failures})`)
