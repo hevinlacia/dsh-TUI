@@ -22,3 +22,17 @@ export function matchPageKey(
   if (key.pageDown === true || /^\[6(;\d+)?u$/.test(input)) return 'down'
   return null
 }
+
+/** Bracket leftovers ink's keypress parser cannot resolve (ESC stripped). */
+const BRACKET_LEFTOVER = /^\[(?:[<>M;]|\?[\d;]*[u$c]?|\d+(?:;\d+)*[u~n])/
+
+/**
+ * True when an input event is a terminal-encoded leftover rather than typed
+ * text: mouse SGR (`[<64;…`), legacy mouse (`[M…`), kitty keyboard query
+ * replies (`[?0u` — the terminal's answer to ink's protocol negotiation)
+ * and kitty CSI-u functional keys (`[5u`). Anchored to full protocol
+ * shapes so pasted text that merely STARTS with '[' still flows through.
+ */
+export function isBracketLeftover(input: string): boolean {
+  return BRACKET_LEFTOVER.test(input)
+}

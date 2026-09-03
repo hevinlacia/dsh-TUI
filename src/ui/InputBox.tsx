@@ -40,6 +40,7 @@ import {
 } from '../args.js'
 import type { PresetInfo } from '../presets.js'
 import { palette } from './theme.js'
+import { isBracketLeftover } from './pageKeys.js'
 import { CommandMenu } from './CommandMenu.js'
 
 const MAX_HISTORY = 64
@@ -265,10 +266,10 @@ export function InputBox(props: {
 
   useInput((input, key) => {
     if (modalOpen) return // modals own the keyboard while open
-    // Terminal-encoded keys leak through Ink's keypress parser as bracketed
-    // leftovers — mouse SGR (`[<64;…`, `[M…`) and kitty CSI-u functional keys
-    // (`[5u` = PageUp) are never text (see pageKeys.ts).
-    if (/^\[(<|M|\d)/.test(input)) return
+    // Terminal-encoded leftovers (mouse SGR, kitty query replies like
+    // '[?0u', CSI-u keys) leak through Ink's keypress parser — never text
+    // (see isBracketLeftover in pageKeys.ts).
+    if (isBracketLeftover(input)) return
     if (key.ctrl && input === 'c') {
       if (running) {
         controller.interrupt()
